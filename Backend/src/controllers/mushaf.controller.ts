@@ -94,3 +94,15 @@ export async function getAllMushafPages(
     next(error);
   }
 }
+
+/**
+ * GET /api/mushaf/all-pages/version
+ * Renvoie uniquement la version du bundle, pour un check rapide.
+ */
+export async function getAllMushafPagesVersion(
+  _req: Request,
+  res: Response,
+): Promise<void> {
+  res.setHeader("Cache-Control", "public, max-age=3600");
+  res.status(200).json({ version: 1 });
+}

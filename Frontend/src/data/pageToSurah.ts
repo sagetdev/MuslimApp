@@ -1,0 +1,190 @@
+// src/data/pageToSurah.ts
+
+// Pour chaque sourate (1..114), la page du mushaf (1..604) où elle commence.
+// Source : mushaf de Médine (604 pages).
+const SURAH_START_PAGES: number[] = [
+  1, 2, 50, 77, 106, 128, 151, 177, 187, 208,
+  221, 235, 249, 255, 262, 267, 282, 293, 305, 312,
+  322, 332, 342, 350, 359, 367, 377, 385, 396, 404,
+  411, 415, 418, 428, 434, 440, 446, 453, 458, 467,
+  477, 483, 489, 496, 499, 502, 507, 511, 515, 518,
+  520, 523, 526, 528, 531, 534, 537, 542, 545, 549,
+  551, 553, 554, 556, 558, 560, 562, 564, 566, 568,
+  570, 572, 574, 575, 577, 578, 580, 582, 583, 585,
+  586, 587, 587, 589, 590, 591, 591, 592, 593, 594,
+  595, 595, 596, 596, 597, 597, 598, 598, 599, 599,
+  600, 600, 601, 601, 601, 602, 602, 602, 603, 603,
+  603, 604, 604, 604,
+];
+
+// Noms arabes des 114 sourates (dans l'ordre du mushaf).
+// Index 0 = sourate 1 (Al-Fatiha), index 113 = sourate 114 (An-Nas).
+export const SURAH_NAMES_AR: string[] = [
+  "الفاتحة",
+  "البقرة",
+  "آل عمران",
+  "النساء",
+  "المائدة",
+  "الأنعام",
+  "الأعراف",
+  "الأنفال",
+  "التوبة",
+  "يونس",
+  "هود",
+  "يوسف",
+  "الرعد",
+  "إبراهيم",
+  "الحجر",
+  "النحل",
+  "الإسراء",
+  "الكهف",
+  "مريم",
+  "طه",
+  "الأنبياء",
+  "الحج",
+  "المؤمنون",
+  "النور",
+  "الفرقان",
+  "الشعراء",
+  "النمل",
+  "القصص",
+  "العنكبوت",
+  "الروم",
+  "لقمان",
+  "السجدة",
+  "الأحزاب",
+  "سبأ",
+  "فاطر",
+  "يس",
+  "الصافات",
+  "ص",
+  "الزمر",
+  "غافر",
+  "فصلت",
+  "الشورى",
+  "الزخرف",
+  "الدخان",
+  "الجاثية",
+  "الأحقاف",
+  "محمد",
+  "الفتح",
+  "الحجرات",
+  "ق",
+  "الذاريات",
+  "الطور",
+  "النجم",
+  "القمر",
+  "الرحمن",
+  "الواقعة",
+  "الحديد",
+  "المجادلة",
+  "الحشر",
+  "الممتحنة",
+  "الصف",
+  "الجمعة",
+  "المنافقون",
+  "التغابن",
+  "الطلاق",
+  "التحريم",
+  "الملك",
+  "القلم",
+  "الحاقة",
+  "المعارج",
+  "نوح",
+  "الجن",
+  "المزمل",
+  "المدثر",
+  "القيامة",
+  "الإنسان",
+  "المرسلات",
+  "النبأ",
+  "النازعات",
+  "عبس",
+  "التكوير",
+  "الانفطار",
+  "المطففين",
+  "الانشقاق",
+  "البروج",
+  "الطارق",
+  "الأعلى",
+  "الغاشية",
+  "الفجر",
+  "البلد",
+  "الشمس",
+  "الليل",
+  "الضحى",
+  "الشرح",
+  "التين",
+  "العلق",
+  "القدر",
+  "البينة",
+  "الزلزلة",
+  "العاديات",
+  "القارعة",
+  "التكاثر",
+  "العصر",
+  "الهمزة",
+  "الفيل",
+  "قريش",
+  "الماعون",
+  "الكوثر",
+  "الكافرون",
+  "النصر",
+  "المسد",
+  "الإخلاص",
+  "الفلق",
+  "الناس",
+];
+
+export const TOTAL_PAGES = 604;
+
+/**
+ * Construit dynamiquement le tableau page → sourate (longueur 604).
+ * PAGE_TO_SURAH[page - 1] = numéro de la sourate à cette page.
+ */
+function buildPageToSurah(): number[] {
+  const map: number[] = new Array(TOTAL_PAGES).fill(1);
+
+  for (let surah = 0; surah < SURAH_START_PAGES.length; surah++) {
+    const start = SURAH_START_PAGES[surah];
+    const end =
+      surah + 1 < SURAH_START_PAGES.length
+        ? SURAH_START_PAGES[surah + 1] - 1
+        : TOTAL_PAGES;
+
+    for (let page = start; page <= end; page++) {
+      map[page - 1] = surah + 1;
+    }
+  }
+
+  return map;
+}
+
+export const PAGE_TO_SURAH: number[] = buildPageToSurah();
+
+/**
+ * Renvoie le numéro de la sourate (1..114) pour une page donnée (1..604).
+ */
+export function getSurahNumberForPage(page: number): number {
+  if (page < 1 || page > TOTAL_PAGES) return 1;
+  return PAGE_TO_SURAH[page - 1];
+}
+
+/**
+ * Renvoie le nom arabe de la sourate pour une page donnée (1..604).
+ */
+export function getSurahNameForPage(page: number): string {
+  const num = getSurahNumberForPage(page);
+  return SURAH_NAMES_AR[num - 1] ?? "";
+}
+
+/**
+ * Renvoie { number, name } pour une page donnée.
+ */
+export function getSurahForPage(page: number): { number: number; name: string } {
+  const number = getSurahNumberForPage(page);
+  return {
+    number,
+    name: SURAH_NAMES_AR[number - 1] ?? "",
+  };
+}

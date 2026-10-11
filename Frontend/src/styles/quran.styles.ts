@@ -10,6 +10,16 @@ export default function createQuranStyles(colors: ReturnType<typeof useAppTheme>
     content: { paddingHorizontal: 12, paddingBottom: 32, alignItems: "center" },
     frame: { borderWidth: 2, borderColor: colors.primary, borderRadius: 6, padding: 4 },
     paper: { borderWidth: 1, borderColor: colors.primary, borderRadius: 3, backgroundColor: colors.surface, paddingVertical: 12, paddingHorizontal: 12 },
+    
+    // Style spécifique pour l'encadrement authentique des Pages 1 & 2
+    specialPaperContainer: {
+      justifyContent: "center",
+      borderWidth: 2,
+      borderColor: colors.primary,
+      backgroundColor: colors.surfaceAlt,
+      paddingVertical: 18,
+    },
+
     line: { direction: "ltr", flexDirection: "row-reverse", alignItems: "center" },
     headerSlot: { alignItems: "center", justifyContent: "center" },
     banner: { width: "100%", height: "84%", borderWidth: 1.5, borderColor: colors.primary, backgroundColor: colors.surfaceAlt, borderRadius: 4, alignItems: "center", justifyContent: "center" },
@@ -24,5 +34,22 @@ export default function createQuranStyles(colors: ReturnType<typeof useAppTheme>
     feedbackText: { color: colors.muted, fontSize: 13, textAlign: "center", lineHeight: 19 },
     retryButton: { paddingHorizontal: 16, paddingVertical: 11, borderRadius: 13, backgroundColor: colors.primary },
     retryText: { color: colors.primaryText, fontWeight: "700" },
+    
+    mushafHeaderContainer: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    },
+    mushafHeaderSubtext: {
+    color: colors.primary,
+    fontFamily: "UthmanicHafs",
+    fontSize: 14,
+    fontWeight: "600",
+    textAlign: "center",
+    minWidth: 90,
+    },
   });
 }

@@ -9,8 +9,9 @@ export default function QuranPageRoute() {
 
   return (
     <QuranPage
-      page={page}
-      onPageChange={(next) => router.setParams({ page: String(next) })}
+      // 🔑 Force un remontage complet si la page change depuis l'extérieur.
+      key={`quran-${page}`}
+      initialPage={page}
       onClose={() => (router.canGoBack() ? router.back() : router.replace("/"))}
     />
   );
