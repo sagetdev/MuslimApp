@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import * as Location from "expo-location";
 import {
@@ -114,6 +114,7 @@ async function getCoordinates() {
 
 export default function ExploreScreen() {
   const { colors } = useAppTheme();
+  const router = useRouter();
   const params = useLocalSearchParams<{ module?: string | string[] }>();
   const initialModule = Array.isArray(params.module) ? params.module[0] : params.module;
   const [selected, setSelected] = useState<ModuleId>(
@@ -274,6 +275,7 @@ export default function ExploreScreen() {
                     "Données chargées depuis ton backend."}
               </Text>
             </View>
+            
             <Pressable onPress={() => void loadData()} accessibilityLabel="Actualiser">
               <Ionicons name="refresh-outline" size={22} color={colors.primary} />
             </Pressable>
@@ -305,6 +307,15 @@ export default function ExploreScreen() {
               style={[styles.searchButton, { backgroundColor: colors.primary }]}
             >
               <Text style={{ color: colors.primaryText, fontWeight: "700" }}>Rechercher / Charger</Text>
+            </Pressable>
+          ) : null}
+
+          {selected === "quran" ? (
+            <Pressable
+                onPress={() => router.push("/quran/1")}
+                style={[styles.searchButton, { backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border }]}
+            >
+                <Text style={{ color: colors.text, fontWeight: "700" }}>Lire le Coran (page 1)</Text>
             </Pressable>
           ) : null}
         </View>

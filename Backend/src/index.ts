@@ -7,6 +7,7 @@ import { errorHandler } from "./middleware/error-handler.js";
 import quranRoutes from "./routes/quran.routes.js";
 import islamicRoutes from "./routes/islamic.routes.js";
 import prayerCalendarRoutes from "./routes/prayer-calendar.routes.js";
+import mushafRoutes from "./routes/mushaf.routes.js";
 
 const app = express();
 
@@ -25,6 +26,7 @@ app.get("/health", (_req, res) => {
 app.use("/api/quran", quranRoutes);
 app.use("/api", islamicRoutes);
 app.use("/api", prayerCalendarRoutes);
+app.use("/api/mushaf", mushafRoutes);
 
 // Frontend web (build Expo copié dans Backend/public)
 const publicDir = path.join(process.cwd(), "public");

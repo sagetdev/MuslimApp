@@ -1,80 +1,43 @@
 import { Ionicons } from "@expo/vector-icons";
-import { AmiriQuran_400Regular, useFonts } from "@expo-google-fonts/amiri-quran";
+import * as Font from "expo-font";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, Text, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { apiFetch } from "../src/lib/api";
 import createQuranStyles from "../src/styles/quran.styles";
 import { useAppTheme } from "../src/theme/ThemeProvider";
 
-type Ayah = { surah: number | null; number: number; text: string };
-type Block = { key: string; title: string | null; ayahs: Ayah[] };
-type Context = { surah: number | null; name: string | null };
+type Word = { code: string | null; text: string | null; kind: "word" | "end"; page: number };
+type Line = { number: number; words: Word[] };
+type Header = { type: "banner"; name: string } | { type: "bismillah" };
+type MushafPageData = { page: number; lines: Line[]; headers: Record<string, Header> };
 
-const TEXT_KEYS = ["text_uthmani", "uthmani", "arabic", "arabic_text", "text_ar", "text", "ayah_text"];
-const NUMBER_KEYS = ["ayah", "ayah_number", "number_in_surah", "numberInSurah", "verse_number", "verse", "number"];
-const SURAH_KEYS = ["surah", "surah_number", "surahNumber", "chapter", "chapter_id"];
-const NAME_KEYS = ["name_arabic", "arabic_name", "name_ar", "surah_name_arabic", "name"];
-const ARABIC = /[\u0600-\u06FF]/;
+const FONT_CDN = "https://verses.quran.foundation/fonts/quran/hafs";
 const TOTAL_PAGES = 604;
+const FONT_RATIO = 0.058; // taille de police / largeur de ligne : à ajuster si les mots débordent
+const BISMILLAH = "بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ";
 
 const toArabicDigits = (n: number) => String(n).replace(/\d/g, (d) => "٠١٢٣٤٥٦٧٨٩"[Number(d)]);
 
-function unwrapResponse(value: unknown): unknown {
-  if (value && typeof value === "object" && !Array.isArray(value) && "data" in value) {
-    return (value as { data: unknown }).data;
+const fontPromises = new Map<string, Promise<void>>();
+
+function ensureFont(name: string, uri: string): Promise<void> {
+  let promise = fontPromises.get(name);
+
+  if (!promise) {
+    promise = Font.loadAsync({ [name]: { uri } }).catch((error) => {
+      fontPromises.delete(name);
+      throw error;
+    });
+    fontPromises.set(name, promise);
   }
-  return value;
+
+  return promise;
 }
 
-function pickString(obj: Record<string, unknown>, keys: string[]): string | null {
-  for (const key of keys) {
-    const v = obj[key];
-    if (typeof v === "string" && ARABIC.test(v)) return v;
-  }
-  return null;
-}
-
-function pickNumber(obj: Record<string, unknown>, keys: string[]): number | null {
-  for (const key of keys) {
-    const v = obj[key];
-    if (typeof v === "number" && Number.isFinite(v)) return v;
-    if (typeof v === "string" && /^\d+$/.test(v)) return Number(v);
-  }
-  return null;
-}
-
-function readSurah(obj: Record<string, unknown>): Context {
-  for (const key of SURAH_KEYS) {
-    const v = obj[key];
-    if (typeof v === "number") return { surah: v, name: null };
-    if (typeof v === "string" && /^\d+$/.test(v)) return { surah: Number(v), name: null };
-    if (v && typeof v === "object" && !Array.isArray(v)) {
-      const inner = v as Record<string, unknown>;
-      return { surah: pickNumber(inner, ["number", "id"]), name: pickString(inner, NAME_KEYS) };
-    }
-  }
-  return { surah: null, name: null };
-}
-
-function collectAyahs(value: unknown, context: Context, out: Ayah[]): void {
-  if (Array.isArray(value)) {
-    for (const item of value) collectAyahs(item, context, out);
-    return;
-  }
-  if (!value || typeof value !== "object") return;
-
-  const obj = value as Record<string, unknown>;
-  const own = readSurah(obj);
-  const next: Context = { surah: own.surah ?? context.surah, name: own.name ?? context.name };
-  const text = pickString(obj, TEXT_KEYS);
-
-  if (text) {
-    out.push({ surah: next.surah, number: pickNumber(obj, NUMBER_KEYS) ?? out.length + 1, text });
-    return;
-  }
-  for (const child of Object.values(obj)) collectAyahs(child, next, out);
-}
+const pageFont = (page: number) => `QCF2_P${page}`;
+const loadPageFont = (page: number) => ensureFont(pageFont(page), `${FONT_CDN}/v2/ttf/p${page}.ttf`);
+const loadHafsFont = () => ensureFont("UthmanicHafs", `${FONT_CDN}/uthmanic_hafs/UthmanicHafs1Ver18.ttf`);
 
 type Props = {
   page: number;
@@ -85,12 +48,18 @@ type Props = {
 export default function QuranPage({ page, onPageChange, onClose }: Props) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createQuranStyles(colors), [colors]);
-  const [fontsLoaded] = useFonts({ AmiriQuran_400Regular });
-  const [ayahs, setAyahs] = useState<Ayah[]>([]);
+  const { width } = useWindowDimensions();
+  const [data, setData] = useState<MushafPageData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
+
+  const frameWidth = Math.min(width - 24, 560);
+  const lineWidth = frameWidth - 38;
+  const fontSize = lineWidth * FONT_RATIO;
+  const lineHeight = fontSize * 1.8;
+  const totalLines = page <= 2 ? 8 : 15;
 
   useEffect(() => {
     let active = true;
@@ -98,44 +67,45 @@ export default function QuranPage({ page, onPageChange, onClose }: Props) {
     setError(null);
     scrollRef.current?.scrollTo({ y: 0, animated: false });
 
-    apiFetch<unknown>(`/quran/pages/${page}`)
-      .then((response) => {
+    (async () => {
+      try {
+        const [response] = await Promise.all([
+          apiFetch<{ data: MushafPageData }>(`/mushaf/pages/${page}`),
+          loadHafsFont(),
+          loadPageFont(page),
+        ]);
+
+        const result = response.data;
+        const pages = new Set(result.lines.flatMap((line) => line.words.map((word) => word.page)));
+
+        await Promise.all([...pages].map(loadPageFont));
+
         if (!active) return;
-        const out: Ayah[] = [];
-        collectAyahs(unwrapResponse(response), { surah: null, name: null }, out);
-        setAyahs(out);
-        if (out.length === 0) setError("Aucun verset arabe trouvé dans la réponse de l'API.");
-      })
-      .catch((caught) => {
+        setData(result);
+      } catch (caught) {
         if (!active) return;
-        setAyahs([]);
+        setData(null);
         setError(caught instanceof Error ? caught.message : "Une erreur inconnue est survenue.");
-      })
-      .finally(() => {
+      } finally {
         if (active) setLoading(false);
-      });
+      }
+    })();
 
     return () => {
       active = false;
     };
   }, [page, reloadKey]);
 
-  const blocks = useMemo<Block[]>(() => {
-    const result: Block[] = [];
-    for (const ayah of ayahs) {
-      const last = result[result.length - 1];
-      if (ayah.number === 1 || !last) {
-        result.push({
-          key: `${ayah.surah ?? "s"}-${ayah.number}-${result.length}`,
-          title: ayah.number === 1 && ayah.surah ? `سُورَةُ ${toArabicDigits(ayah.surah)}` : null,
-          ayahs: [ayah],
-        });
-      } else {
-        last.ayahs.push(ayah);
-      }
-    }
-    return result;
-  }, [ayahs]);
+  const rows = useMemo(() => {
+    if (!data) return [];
+
+    const byNumber = new Map(data.lines.map((line) => [line.number, line] as const));
+
+    return Array.from({ length: totalLines }, (_, index) => {
+      const number = index + 1;
+      return { number, line: byNumber.get(number), header: data.headers[number] };
+    });
+  }, [data, totalLines]);
 
   const hasPrev = page > 1;
   const hasNext = page < TOTAL_PAGES;
@@ -153,37 +123,79 @@ export default function QuranPage({ page, onPageChange, onClose }: Props) {
       </View>
 
       <ScrollView ref={scrollRef} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {loading || !fontsLoaded ? (
+        {loading ? (
           <View style={styles.feedback}>
             <ActivityIndicator size="large" color={colors.primary} />
           </View>
-        ) : error ? (
+        ) : error || !data ? (
           <View style={styles.feedback}>
             <Ionicons name="alert-circle-outline" size={28} color="#E57373" />
-            <Text style={styles.feedbackText}>{error}</Text>
+            <Text style={styles.feedbackText}>{error ?? "Aucune donnée."}</Text>
             <Pressable onPress={() => setReloadKey((key) => key + 1)} style={styles.retryButton}>
               <Text style={styles.retryText}>Réessayer</Text>
             </Pressable>
           </View>
         ) : (
-          <View style={styles.paper}>
-            {blocks.map((block) => (
-              <View key={block.key} style={{ gap: 14 }}>
-                {block.title ? (
-                  <View style={styles.banner}>
-                    <Text style={styles.bannerText}>{block.title}</Text>
-                  </View>
-                ) : null}
-                <Text style={styles.quranText}>
-                  {block.ayahs.map((ayah) => (
-                    <Text key={`${ayah.surah}-${ayah.number}`}>
-                      {ayah.text}
-                      <Text style={styles.marker}> ﴿{toArabicDigits(ayah.number)}﴾ </Text>
-                    </Text>
-                  ))}
-                </Text>
-              </View>
-            ))}
+          <View style={[styles.frame, { width: frameWidth }]}>
+            <View style={styles.paper}>
+              {rows.map(({ number, line, header }) => {
+                if (line) {
+                  return (
+                    <View
+                      key={number}
+                      style={[
+                        styles.line,
+                        {
+                          height: lineHeight,
+                          justifyContent: page <= 2 ? "center" : "space-between",
+                          gap: page <= 2 ? fontSize * 0.2 : 0,
+                        },
+                      ]}
+                    >
+                      {line.words.map((word, index) => (
+                        <Text
+                          key={`${number}-${index}`}
+                          style={{
+                            color: colors.text,
+                            fontSize,
+                            lineHeight,
+                            fontFamily: word.kind === "end" ? "UthmanicHafs" : pageFont(word.page),
+                          }}
+                        >
+                          {word.kind === "end" ? word.text : word.code}
+                        </Text>
+                      ))}
+                    </View>
+                  );
+                }
+
+                if (header?.type === "banner") {
+                  return (
+                    <View key={number} style={[styles.headerSlot, { height: lineHeight }]}>
+                      <View style={styles.banner}>
+                        <Text style={{ color: colors.primary, fontFamily: "UthmanicHafs", fontSize: fontSize * 0.9 }}>
+                          {`سُورَةُ ${header.name}`}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                }
+
+                if (header?.type === "bismillah") {
+                  return (
+                    <View key={number} style={[styles.headerSlot, { height: lineHeight }]}>
+                      <Text style={{ color: colors.text, fontFamily: "UthmanicHafs", fontSize: fontSize * 0.95 }}>
+                        {BISMILLAH}
+                      </Text>
+                    </View>
+                  );
+                }
+
+                return <View key={number} style={{ height: lineHeight }} />;
+              })}
+
+              <Text style={styles.pageNumber}>{toArabicDigits(page)}</Text>
+            </View>
           </View>
         )}
 
@@ -206,6 +218,8 @@ export default function QuranPage({ page, onPageChange, onClose }: Props) {
             <Ionicons name="chevron-forward" size={16} color={colors.primaryText} />
           </Pressable>
         </View>
+
+        <Text style={styles.credit}>Polices du Coran : Quran Foundation</Text>
       </ScrollView>
     </SafeAreaView>
   );

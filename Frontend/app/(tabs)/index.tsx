@@ -328,7 +328,7 @@ export default function DashboardScreen() {
           </View>
 
           <Pressable
-            onPress={() => router.push({ pathname: "/explore", params: { module: "quran" } })}
+            onPress={() => router.push("/quran/1")}
             style={({ pressed }) => [
               styles.quranCard,
               pressed && styles.pressed,
