@@ -1,4 +1,4 @@
-
+import path from "node:path";
 import express from "express";
 import cors from "cors";
 import { env } from "./config/env.js";
@@ -25,6 +25,19 @@ app.get("/health", (_req, res) => {
 app.use("/api/quran", quranRoutes);
 app.use("/api", islamicRoutes);
 app.use("/api", prayerCalendarRoutes);
+
+// Frontend web (build Expo copié dans Backend/public)
+const publicDir = path.join(process.cwd(), "public");
+
+app.use(express.static(publicDir));
+
+app.get("/{*splat}", (req, res, next) => {
+  if (req.path.startsWith("/api")) return next();
+
+  res.sendFile(path.join(publicDir, "index.html"), (error) => {
+    if (error) next();
+  });
+});
 
 app.use((_req, res) => {
   res.status(404).json({

@@ -1,0 +1,8 @@
+{
+  "name": "muslimapp",
+  "private": true,
+  "scripts": {
+    "build": "cd Frontend && npm ci --include=dev && npx expo export -p web && cd ../Backend && npm ci --include=dev && npm run build && rm -rf public && cp -r ../Frontend/dist public",
+    "start": "cd Backend && npm start"
+  }
+}
