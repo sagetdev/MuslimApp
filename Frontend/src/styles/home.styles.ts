@@ -1,0 +1,237 @@
+import { StyleSheet } from "react-native";
+import { useAppTheme } from "../theme/ThemeProvider";
+
+export default function createStyles(colors: ReturnType<typeof useAppTheme>["colors"]) {
+  return StyleSheet.create({
+    safeArea: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    scrollContent: {
+      flexGrow: 1,
+      paddingHorizontal: 20,
+      paddingBottom: 32,
+    },
+    container: {
+      width: "100%",
+      maxWidth: 920,
+      alignSelf: "center",
+      gap: 24,
+    },
+    header: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingTop: 12,
+    },
+    brand: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+    },
+    logo: {
+      width: 44,
+      height: 44,
+      borderRadius: 15,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.primary,
+    },
+    brandName: {
+      color: colors.text,
+      fontSize: 19,
+      fontWeight: "800",
+    },
+    brandCaption: {
+      color: colors.muted,
+      fontSize: 12,
+      marginTop: 2,
+    },
+    themeButton: {
+      width: 44,
+      height: 44,
+      borderRadius: 15,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    greeting: {
+      gap: 7,
+      marginTop: 6,
+    },
+    date: {
+      color: colors.primary,
+      fontSize: 13,
+      fontWeight: "600",
+      textTransform: "capitalize",
+    },
+    title: {
+      color: colors.text,
+      fontSize: 29,
+      fontWeight: "800",
+      letterSpacing: -0.7,
+    },
+    description: {
+      color: colors.muted,
+      fontSize: 14,
+      lineHeight: 21,
+    },
+    prayerCard: {
+      backgroundColor: colors.surface,
+      borderColor: colors.border,
+      borderWidth: 1,
+      borderRadius: 24,
+      padding: 18,
+      gap: 16,
+    },
+    prayerCardHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    prayerHeading: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 9,
+    },
+    sectionTitle: {
+      color: colors.text,
+      fontSize: 17,
+      fontWeight: "700",
+    },
+    link: {
+      color: colors.primary,
+      fontSize: 13,
+      fontWeight: "700",
+    },
+    locationRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+    },
+    mutedText: {
+      color: colors.muted,
+      fontSize: 12,
+    },
+    prayerList: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+    },
+    prayerItem: {
+      flexGrow: 1,
+      flexBasis: "28%",
+      minWidth: 82,
+      backgroundColor: colors.surfaceAlt,
+      borderRadius: 15,
+      paddingVertical: 13,
+      paddingHorizontal: 9,
+      alignItems: "center",
+      gap: 7,
+    },
+    prayerName: {
+      color: colors.text,
+      fontSize: 12,
+      fontWeight: "600",
+    },
+    prayerTime: {
+      color: colors.primary,
+      fontSize: 16,
+      fontWeight: "800",
+    },
+    demoNotice: {
+      color: colors.muted,
+      fontSize: 11,
+    },
+    sectionHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 10,
+      marginBottom: -12,
+    },
+    featureGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 12,
+    },
+    featureCard: {
+      flexBasis: "30%",
+      flexGrow: 1,
+      minWidth: 145,
+      backgroundColor: colors.surface,
+      borderColor: colors.border,
+      borderWidth: 1,
+      borderRadius: 20,
+      padding: 15,
+      gap: 8,
+    },
+    featureIcon: {
+      width: 45,
+      height: 45,
+      borderRadius: 15,
+      backgroundColor: colors.surfaceAlt,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 3,
+    },
+    featureTitle: {
+      color: colors.text,
+      fontSize: 14,
+      fontWeight: "700",
+    },
+    featureSubtitle: {
+      color: colors.muted,
+      fontSize: 12,
+      lineHeight: 17,
+    },
+    pressed: {
+      opacity: 0.75,
+    },
+    quranCard: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 14,
+      padding: 17,
+      borderRadius: 22,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+    },
+    quranIcon: {
+      width: 54,
+      height: 54,
+      borderRadius: 18,
+      backgroundColor: colors.primary,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    quranText: {
+      flex: 1,
+      gap: 4,
+    },
+    quranEyebrow: {
+      color: colors.primary,
+      fontSize: 10,
+      fontWeight: "800",
+      letterSpacing: 1.2,
+    },
+    quranTitle: {
+      color: colors.text,
+      fontSize: 17,
+      fontWeight: "800",
+    },
+    quranSubtitle: {
+      color: colors.muted,
+      fontSize: 12,
+    },
+    footer: {
+      color: colors.muted,
+      fontSize: 11,
+      textAlign: "center",
+      paddingVertical: 10,
+    },
+  });
+}
