@@ -212,3 +212,41 @@ export async function fetchMushafPage(page: number) {
     headers,
   };
 }
+
+export async function fetchAllMushafPages(
+  onProgress?: (current: number, total: number) => void,
+): Promise<{ page: number; lines: { number: number; words: MushafWord[] }[]; headers: Record<number, MushafHeader> }[]> {
+  const TOTAL_PAGES = 604;
+  const CONCURRENCY = 8;
+  const results: Awaited<ReturnType<typeof fetchMushafPage>>[] = new Array(TOTAL_PAGES);
+  const pages = Array.from({ length: TOTAL_PAGES }, (_, i) => i + 1);
+
+  let index = 0;
+  let completed = 0;
+
+  async function worker() {
+    while (true) {
+      const current = index++;
+      if (current >= pages.length) return;
+
+      const page = pages[current];
+      try {
+        results[page - 1] = await fetchMushafPage(page);
+      } catch (error) {
+        // En cas d'échec sur une page, on réessaie une fois
+        try {
+          results[page - 1] = await fetchMushafPage(page);
+        } catch {
+          // On laisse la page undefined, elle sera filtrée
+        }
+      }
+      completed++;
+      onProgress?.(completed, TOTAL_PAGES);
+    }
+  }
+
+  await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+
+  // Filtre les pages manquantes + tri final
+  return results.filter((p): p is NonNullable<typeof p> => p != null);
+}
