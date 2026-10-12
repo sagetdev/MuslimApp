@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import BackButton from "../components/BackButton";
 import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
@@ -140,6 +141,7 @@ export default function AdhkarScreen() {
           alignSelf: "center",
         }}
       >
+        <BackButton />
         <View style={{ gap: 7 }}>
           <Text style={{ color: colors.primary, fontSize: 10, fontWeight: "900", letterSpacing: 1.8 }}>
             RAPPEL & MÉDITATION
