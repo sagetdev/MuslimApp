@@ -2,8 +2,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import Slider from "@react-native-community/slider";
-import { getOfflinePage } from "../src/lib/quranOffline";
 import QuranPage from "../components/QuranPage";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -71,9 +69,6 @@ export default function QuranReaderScreen() {
   const [selectedVerse, setSelectedVerse] = useState(0);
   const [readingMode, setReadingMode] = useState<"verses" | "pages">("verses");
   const [pageNumber, setPageNumber] = useState(1);
-  const [pageData, setPageData] = useState<Record<string, unknown> | null>(null);
-  const [pageLoading, setPageLoading] = useState(false);
-  const [pageError, setPageError] = useState("");
 
   useEffect(() => {
     void AsyncStorage.getItem(FAVORITES_KEY).then((raw) => {
@@ -120,47 +115,6 @@ export default function QuranReaderScreen() {
     void loadSurah(Number(initial || 1));
   }, [initial, loadSurah]);
 
-
-  const loadLocalPage = useCallback(async (page: number) => {
-    const safePage = Math.max(1, Math.min(604, Math.round(page)));
-    setPageNumber(safePage);
-    setPageLoading(true);
-    setPageError("");
-    try {
-      // Le mode Mushaf lit exclusivement le bundle embarqué dans l'application.
-      // Aucun appel à l'API serveur n'est effectué pour charger une page.
-      const result = await getOfflinePage<unknown>(safePage);
-      const root = objectValue(result);
-      const data = objectValue(root.data ?? result);
-      if (!Object.keys(data).length) {
-        throw new Error("Cette page n'est pas présente dans le Coran embarqué. Vérifie la génération des assets avant le build.");
-      }
-      setPageData(data);
-    } catch (e) {
-      setPageData(null);
-      setPageError(e instanceof Error ? e.message : "Impossible de lire la page hors ligne.");
-    } finally {
-      setPageLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (readingMode === "pages") void loadLocalPage(pageNumber);
-  }, [readingMode, pageNumber, loadLocalPage]);
-
-  const pageLines = useMemo(() => {
-    const source = pageData;
-    if (!source) return [] as unknown[];
-    const candidates = [source.lines, source.verses, source.ayahs, source.words];
-    const found = candidates.find(Array.isArray);
-    return Array.isArray(found) ? found : [];
-  }, [pageData]);
-
-  function getPageLineText(value: unknown): string {
-    if (typeof value === "string" || typeof value === "number") return String(value);
-    const line = objectValue(value);
-    return firstText(line, ["text", "text_uthmani", "arabic", "textArabic", "content", "words"]);
-  }
 
   const styles = useMemo(
     () => ({
@@ -295,80 +249,6 @@ export default function QuranReaderScreen() {
           </Pressable>
         </View>
 
-
-        {readingMode === "pages" ? (
-          <View style={[styles.card, { gap: 14 }]}>
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-              <Text style={[styles.text, { fontWeight: "800", fontSize: 17 }]}>Mushaf hors ligne</Text>
-              <Text style={[styles.muted, { fontSize: 12 }]}>Page {pageNumber} / 604</Text>
-            </View>
-            <Slider
-              minimumValue={1}
-              maximumValue={604}
-              step={1}
-              value={pageNumber}
-              onSlidingComplete={(value) => void loadLocalPage(value)}
-              minimumTrackTintColor={colors.primary}
-              maximumTrackTintColor={colors.border}
-              thumbTintColor={colors.primary}
-            />
-            <View style={{ flexDirection: "row", gap: 10 }}>
-              <Pressable
-                disabled={pageNumber <= 1 || pageLoading}
-                onPress={() => void loadLocalPage(pageNumber - 1)}
-                style={[styles.action, { flex: 1, opacity: pageNumber <= 1 ? 0.45 : 1 }]}
-              >
-                <Text style={{ color: colors.primaryText, fontWeight: "800" }}>Page précédente</Text>
-              </Pressable>
-              <Pressable
-                disabled={pageNumber >= 604 || pageLoading}
-                onPress={() => void loadLocalPage(pageNumber + 1)}
-                style={[styles.action, { flex: 1, opacity: pageNumber >= 604 ? 0.45 : 1 }]}
-              >
-                <Text style={{ color: colors.primaryText, fontWeight: "800" }}>Page suivante</Text>
-              </Pressable>
-            </View>
-            {pageLoading ? <ActivityIndicator color={colors.primary} size="large" /> : pageError ? (
-              <Text style={{ color: "#E57373", lineHeight: 21 }}>{pageError}</Text>
-            ) : pageLines.length ? (
-              <ScrollView
-                horizontal
-                pagingEnabled
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ width: "100%" }}
-              >
-                <View style={{
-                  width: "100%",
-                  minHeight: 420,
-                  justifyContent: "center",
-                  padding: 18,
-                  gap: 16,
-                  borderRadius: 14,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  backgroundColor: colors.surfaceAlt,
-                }}>
-                  {pageLines.map((line, index) => {
-                    const text = getPageLineText(line);
-                    return text ? (
-                      <Text key={index} style={{
-                        color: colors.text,
-                        fontSize: 24,
-                        lineHeight: 42,
-                        textAlign: "center",
-                        writingDirection: "rtl",
-                      }}>{text}</Text>
-                    ) : null;
-                  })}
-                </View>
-              </ScrollView>
-            ) : (
-              <Text style={[styles.muted, { lineHeight: 20 }]}>
-                Le format des données de cette page n'est pas reconnu. Vérifie le contenu de assets/quran/quran-all.qbundle.
-              </Text>
-            )}
-          </View>
-        ) : null}
 
         {readingMode === "verses" ? <View style={[styles.card, { gap: 14 }]}>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
