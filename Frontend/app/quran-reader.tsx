@@ -6,6 +6,7 @@ import QuranPage from "../components/QuranPage";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { apiFetch } from "../src/lib/api";
+import { getBundledSurah, getCachedSurah, setCachedSurah } from "../src/lib/quranTextOffline";
 import { useAppTheme } from "../src/theme/ThemeProvider";
 
 type Surah = {
@@ -87,7 +88,17 @@ export default function QuranReaderScreen() {
     setLoading(true);
     setError("");
     try {
-      const result = await apiFetch<unknown>(`/quran/surahs/${number}`);
+      // Priorité 1 : bundle embarqué au build. Priorité 2 : cache persistant.
+      // Le réseau n'est utilisé qu'en dernier recours.
+      let result =
+        (await getBundledSurah(number)) ??
+        (await getCachedSurah(number));
+
+      if (!result) {
+        result = await apiFetch<unknown>(`/quran/surahs/${number}`);
+        await setCachedSurah(number, result);
+      }
+
       const parsed = extractSurah(result);
       // L’API place les métadonnées dans data.surah et les versets dans data.verses.
       const data = objectValue(objectValue(result).data);
