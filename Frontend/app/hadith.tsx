@@ -2,11 +2,12 @@ import ResourceScreen, { type ResourceConfig } from "../components/RessourceScre
 
 const config: ResourceConfig = {
   title: "Hadiths",
-  subtitle: "Découvre les enseignements et paroles prophétiques.",
+  subtitle: "Parcours les recueils, lis les enseignements et ouvre chaque texte pour consulter ses détails et références disponibles.",
   icon: "library-outline",
-  endpoint: "/hadith/random",
+  endpoint: "/hadith/collections",
   searchEndpoint: "/hadith/search",
   searchParam: "q",
+  kind: "hadith",
 };
 
 export default function HadithScreen() {
