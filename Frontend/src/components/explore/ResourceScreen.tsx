@@ -74,7 +74,7 @@ export default function ResourceScreen({ config }: { config: ResourceConfig }) {
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
 
-  const loadData = useCallback(async (searchText = query) => {
+  const loadData = useCallback(async (searchText = "") => {
     setLoading(true);
     setError(null);
     try {
@@ -91,7 +91,7 @@ export default function ResourceScreen({ config }: { config: ResourceConfig }) {
     } finally {
       setLoading(false);
     }
-  }, [config, query]);
+  }, [config]);
 
   useEffect(() => { void loadData(config.initialSearch ? "" : ""); }, [loadData]);
 
@@ -113,7 +113,7 @@ export default function ResourceScreen({ config }: { config: ResourceConfig }) {
               <Text style={[styles.panelTitle, { color: colors.text }]}>{config.title}</Text>
               <Text style={[styles.panelSubtitle, { color: colors.muted }]}>Données chargées depuis ton backend.</Text>
             </View>
-            <Pressable accessibilityRole="button" accessibilityLabel="Actualiser" onPress={() => void loadData()}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Actualiser" onPress={() => void loadData(query)}>
               <Ionicons name="refresh-outline" size={22} color={colors.primary} />
             </Pressable>
           </View>
