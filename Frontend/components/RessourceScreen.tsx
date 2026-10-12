@@ -182,9 +182,10 @@ function DetailCard({ item, kind, category, onClose, onPrevious, onNext }: {
   const meaning = getMeaning(item);
   const categoryLabel = category || getText(item, ["categoryName", "category_name", "category", "categoryTitle"]);
   const repetitions = getText(item, ["repetitions", "repeat", "repeatCount", "repeat_count", "repeatTimes", "repeat_times", "times", "count", "numberOfRepetitions"]);
-  const source = getText(item, ["reportedBy", "reported_by", "narratedBy", "narrated_by", "narrator", "source", "reference", "citation", "attribution"]);
+  const reportedBy = getText(item, ["reportedBy", "reported_by", "narratedBy", "narrated_by", "narrator", "transmittedBy", "transmitted_by"]);
+  const source = getText(item, ["source", "reference", "citation", "attribution", "hadithReference", "hadith_reference"]);
   const instruction = getText(item, ["instruction", "instructions", "usage", "howToUse", "how_to_use", "whenToSay", "when_to_say", "occasion"]);
-  const metadataKeys = new Set(["category", "categoryName", "category_name", "categoryTitle", "repetitions", "repeat", "repeatCount", "repeat_count", "repeatTimes", "repeat_times", "times", "count", "numberOfRepetitions", "reportedBy", "reported_by", "narratedBy", "narrated_by", "narrator", "source", "reference", "citation", "attribution", "instruction", "instructions", "usage", "howToUse", "how_to_use", "whenToSay", "when_to_say", "occasion"]);
+  const metadataKeys = new Set(["category", "categoryName", "category_name", "categoryTitle", "repetitions", "repeat", "repeatCount", "repeat_count", "repeatTimes", "repeat_times", "times", "count", "numberOfRepetitions", "reportedBy", "reported_by", "narratedBy", "narrated_by", "narrator", "transmittedBy", "transmitted_by", "source", "reference", "citation", "attribution", "hadithReference", "hadith_reference", "instruction", "instructions", "usage", "howToUse", "how_to_use", "whenToSay", "when_to_say", "occasion"]);
   const excluded = new Set(["id", "_id", "title", "name", "nameEnglish", "english", "translation", "meaning", "meaningEnglish", "englishMeaning", "text", "textEnglish", "arabic", "arabicText", "textArabic", "text_ar", "text_arabic", "arabic_text", "nameArabic", "arabicName", "ar", "duaArabic", "dua_arabic", "hadithArabic", "dua", ...(kind === "duas" ? [...metadataKeys] : [])]);
   const details = Object.entries(item).filter(([key, value]) => !excluded.has(key) && value !== undefined && value !== null && value !== "");
   return (
@@ -222,13 +223,26 @@ function DetailCard({ item, kind, category, onClose, onPrevious, onNext }: {
           {repetitions ? <Text style={{ color: colors.text, fontSize: 14, lineHeight: 22 }}>Répéter cette invocation {/^\d+$/.test(repetitions) ? repetitions + " fois" : repetitions}.</Text> : null}
         </View>
       ) : null}
-      {kind === "duas" && source ? (
-        <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10, borderRadius: 16, borderWidth: 1, borderColor: colors.border, padding: 13 }}>
-          <Ionicons name="book-outline" size={18} color={colors.primary} style={{ marginTop: 1 }} />
-          <View style={{ flex: 1, gap: 3 }}>
-            <Text style={{ color: colors.primary, fontSize: 12, fontWeight: "900" }}>{/(reported|narrat|rapport|روى|رواه)/i.test(source) ? "Rapportée par" : "Source / référence"}</Text>
-            <Text style={{ color: colors.text, fontSize: 13, lineHeight: 20 }}>{source}</Text>
-          </View>
+      {kind === "duas" && (reportedBy || source) ? (
+        <View style={{ borderRadius: 16, borderWidth: 1, borderColor: colors.border, padding: 13, gap: 10 }}>
+          {reportedBy ? (
+            <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
+              <Ionicons name="people-outline" size={18} color={colors.primary} style={{ marginTop: 1 }} />
+              <View style={{ flex: 1, gap: 3 }}>
+                <Text style={{ color: colors.primary, fontSize: 12, fontWeight: "900" }}>Rapportée par</Text>
+                <Text style={{ color: colors.text, fontSize: 13, lineHeight: 20 }}>{reportedBy}</Text>
+              </View>
+            </View>
+          ) : null}
+          {source ? (
+            <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
+              <Ionicons name="book-outline" size={18} color={colors.primary} style={{ marginTop: 1 }} />
+              <View style={{ flex: 1, gap: 3 }}>
+                <Text style={{ color: colors.primary, fontSize: 12, fontWeight: "900" }}>Source / référence</Text>
+                <Text style={{ color: colors.text, fontSize: 13, lineHeight: 20 }}>{source}</Text>
+              </View>
+            </View>
+          ) : null}
         </View>
       ) : null}
       {meaning ? (
