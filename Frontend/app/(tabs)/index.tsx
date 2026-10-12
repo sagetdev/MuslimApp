@@ -232,9 +232,16 @@ export default function DashboardScreen() {
             </View>
 
             <Pressable
-              accessibilityLabel="Changer de thème"
-              onPress={toggleTheme}
-              style={styles.themeButton}
+              accessibilityRole="button"
+              accessibilityLabel={mode === "dark" ? "Activer le thème clair" : "Activer le thème sombre"}
+              accessibilityHint="Change immédiatement les couleurs de l’application et mémorise ton choix."
+              accessibilityState={{ selected: mode === "light" }}
+              hitSlop={8}
+              onPress={() => toggleTheme()}
+              style={({ pressed }) => [
+                styles.themeButton,
+                pressed && styles.pressed,
+              ]}
             >
               <Ionicons
                 name={mode === "dark" ? "sunny-outline" : "moon-outline"}
