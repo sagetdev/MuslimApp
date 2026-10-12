@@ -185,16 +185,22 @@ export default function DashboardScreen() {
   }).format(new Date());
 
   function openFeature(title: string) {
-    const moduleByTitle: Record<string, string> = {
-      "Le Coran": "quran",
-      Horaires: "prayer",
-      "Horaires de prière": "prayer",
-      Qibla: "qibla",
-      Hadiths: "hadith",
-      Invocations: "duas",
-      "99 noms d'Allah": "names",
+    const routeByTitle: Record<string, "/quran-reader" | "/prayer" | "/qibla" | "/adhkar" | "/explore"> = {
+      "Le Coran": "/quran-reader",
+      Horaires: "/prayer",
+      "Horaires de prière": "/prayer",
+      Qibla: "/qibla",
+      Hadiths: "/explore",
+      Invocations: "/adhkar",
+      "99 noms d'Allah": "/explore",
     };
-    router.push({ pathname: "/explore", params: { module: moduleByTitle[title] ?? "quran" } });
+    const route = routeByTitle[title] ?? "/explore";
+    if (route === "/explore") {
+      const moduleByTitle: Record<string, string> = { Hadiths: "hadith", "99 noms d'Allah": "names" };
+      router.push({ pathname: "/explore", params: { module: moduleByTitle[title] ?? "quran" } });
+      return;
+    }
+    router.push(route);
   }
 
   return (
@@ -328,7 +334,7 @@ export default function DashboardScreen() {
           </View>
 
           <Pressable
-            onPress={() => router.push("/quran/1")}
+            onPress={() => router.push("/quran-reader")}
             style={({ pressed }) => [
               styles.quranCard,
               pressed && styles.pressed,
