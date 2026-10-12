@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import Slider from "@react-native-community/slider";
 import { getOfflinePage } from "../src/lib/quranOffline";
+import QuranPage from "../components/QuranPage";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { apiFetch } from "../src/lib/api";
@@ -192,6 +193,16 @@ export default function QuranReaderScreen() {
     setFavorites(next);
     await AsyncStorage.setItem(FAVORITES_KEY, JSON.stringify(next));
   };
+
+  if (readingMode === "pages") {
+    return (
+      <QuranPage
+        initialPage={pageNumber}
+        offline
+        onClose={() => setReadingMode("verses")}
+      />
+    );
+  }
 
   return (
     <SafeAreaView style={styles.page} edges={["top", "left", "right"]}>
