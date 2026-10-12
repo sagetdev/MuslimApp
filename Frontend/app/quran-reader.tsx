@@ -68,7 +68,6 @@ export default function QuranReaderScreen() {
   const [fontSize, setFontSize] = useState(28);
   const [selectedVerse, setSelectedVerse] = useState(0);
   const [readingMode, setReadingMode] = useState<"verses" | "pages">("verses");
-  const [pageNumber, setPageNumber] = useState(1);
 
   useEffect(() => {
     void AsyncStorage.getItem(FAVORITES_KEY).then((raw) => {
@@ -151,7 +150,7 @@ export default function QuranReaderScreen() {
   if (readingMode === "pages") {
     return (
       <QuranPage
-        initialPage={pageNumber}
+        initialPage={1}
         offline
         onClose={() => setReadingMode("verses")}
       />
