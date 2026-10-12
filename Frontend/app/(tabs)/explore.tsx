@@ -15,7 +15,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { apiFetch } from "../../src/lib/api";
 import { useAppTheme } from "../../src/theme/ThemeProvider";
 import createExploreStyles from "@/src/styles/explore.styles";
-import { useQuranBundle } from "../../src/hooks/useQuranBundle";
 
 
 type ModuleId = "quran" | "prayer" | "qibla" | "hadith" | "duas" | "names" | "hijri";
@@ -117,7 +116,6 @@ async function getCoordinates() {
 export default function ExploreScreen() {
   const { colors } = useAppTheme();
   const router = useRouter();
-  const { state: bundleState, download: downloadBundle } = useQuranBundle();
   const params = useLocalSearchParams<{ module?: string | string[] }>();
   const initialModule = Array.isArray(params.module) ? params.module[0] : params.module;
   const [selected, setSelected] = useState<ModuleId>(
@@ -313,126 +311,23 @@ export default function ExploreScreen() {
             </Pressable>
           ) : null}
 
-          {selected === "quran" ? (
-            <View style={{ gap: 10 }}>
-                <Pressable
-                onPress={() => router.push("/quran/1")}
-                style={[
-                    styles.searchButton,
-                    {
-                    backgroundColor: colors.surfaceAlt,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    },
-                ]}
-                >
-                <Text style={{ color: colors.text, fontWeight: "700" }}>
-                    Lire le Coran (page 1)
-                </Text>
-                </Pressable>
-
-                {/* Carte téléchargement bundle */}
-                {bundleState.downloaded ? (
-                <View
-                    style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 10,
-                    padding: 14,
-                    borderRadius: 13,
-                    backgroundColor: colors.surfaceAlt,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    }}
-                >
-                    <Ionicons name="checkmark-circle" size={22} color={colors.success} />
-                    <View style={{ flex: 1 }}>
-                    <Text style={{ color: colors.text, fontWeight: "700", fontSize: 14 }}>
-                        Coran disponible hors ligne
-                    </Text>
-                    <Text style={{ color: colors.muted, fontSize: 12, marginTop: 2 }}>
-                        {bundleState.pages} pages en cache
-                    </Text>
-                    </View>
-                    {bundleState.hasUpdate ? (
-                    <Pressable
-                        onPress={() => void downloadBundle()}
-                        style={{
-                        paddingHorizontal: 12,
-                        paddingVertical: 8,
-                        borderRadius: 10,
-                        backgroundColor: colors.primary,
-                        }}
-                    >
-                        <Text style={{ color: colors.primaryText, fontWeight: "700", fontSize: 12 }}>
-                        Mettre à jour
-                        </Text>
-                    </Pressable>
-                    ) : null}
-                </View>
-                ) : bundleState.downloading ? (
-                <View
-                    style={{
-                    padding: 14,
-                    borderRadius: 13,
-                    backgroundColor: colors.surfaceAlt,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    gap: 8,
-                    }}
-                >
-                    <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                    <Text style={{ color: colors.text, fontWeight: "600", fontSize: 13 }}>
-                        Téléchargement du Coran...
-                    </Text>
-                    <Text style={{ color: colors.muted, fontSize: 12 }}>
-                        {Math.round((bundleState.progress?.ratio ?? 0) * 100)}%
-                    </Text>
-                    </View>
-                    <View
-                    style={{
-                        height: 6,
-                        backgroundColor: colors.background,
-                        borderRadius: 3,
-                        overflow: "hidden",
-                    }}
-                    >
-                    <View
-                        style={{
-                        width: `${Math.round((bundleState.progress?.ratio ?? 0) * 100)}%`,
-                        height: "100%",
-                        backgroundColor: colors.primary,
-                        }}
-                    />
-                    </View>
-                </View>
-                ) : (
-                <Pressable
-                    onPress={() => void downloadBundle()}
-                    style={[
-                    styles.searchButton,
-                    {
-                        backgroundColor: colors.primary,
-                        flexDirection: "row",
-                        justifyContent: "center",
-                        gap: 8,
-                    },
-                    ]}
-                >
-                    <Ionicons name="cloud-download-outline" size={18} color={colors.primaryText} />
-                    <Text style={{ color: colors.primaryText, fontWeight: "700" }}>
-                    Télécharger le Coran (~5 Mo)
-                    </Text>
-                </Pressable>
-                )}
-
-                {bundleState.error ? (
-                <Text style={{ color: "#E57373", fontSize: 12, textAlign: "center" }}>
-                    {bundleState.error}
-                </Text>
-                ) : null}
-            </View>
-            ) : null}
+        {selected === "quran" ? (
+            <Pressable
+              onPress={() => router.push("/quran/1")}
+              style={[
+                styles.searchButton,
+                {
+                  backgroundColor: colors.surfaceAlt,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <Text style={{ color: colors.text, fontWeight: "700" }}>
+                Lire le Coran (page 1)
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
 
         {loading ? (

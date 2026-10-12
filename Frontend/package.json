@@ -33,10 +33,12 @@
     "typescript": "~6.0.3"
   },
   "scripts": {
-    "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
-    "web": "expo start --web"
+    "quran:assets": "tsx --env-file=.env scripts/fetch-quran-assets.mts",
+    "postinstall": "npm run quran:assets || exit 0",
+    "start": "npm run quran:assets && expo start",
+    "android": "npm run quran:assets && expo start --android",
+    "ios": "npm run quran:assets && expo start --ios",
+    "web": "npm run quran:assets && expo start --web"
   },
   "private": true
 }

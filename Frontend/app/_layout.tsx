@@ -1,28 +1,18 @@
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useRef } from "react";
-import { start } from "../src/lib/quranPreloader";
-import { isBundleDownloaded } from "../src/lib/quranBundle";
+import { useEffect } from "react";
+import { preloadOfflineQuran } from "../src/lib/quranOffline";
 import { ThemeProvider, useAppTheme } from "../src/theme/ThemeProvider";
+import { loadHafsFont, startFontPreload } from "../src/lib/quranFonts";
 
 function RootNavigator() {
   const { mode, colors } = useAppTheme();
-  const bootstrapped = useRef(false);
 
-  useEffect(() => {
-    if (bootstrapped.current) return;
-    bootstrapped.current = true;
-
-    (async () => {
-      const hasBundle = await isBundleDownloaded();
-      if (hasBundle) {
-        // Tout est déjà téléchargé → pas besoin de précharger
-        return;
-      }
-      // Sinon, précharge en arrière-plan (page par page, Wi-Fi seulement)
-      await start(1, true);
-    })();
-  }, []);
+    useEffect(() => {
+      void preloadOfflineQuran();
+      void loadHafsFont().catch(() => {});
+      startFontPreload(1);
+    }, []);
 
   return (
     <>
@@ -34,10 +24,6 @@ function RootNavigator() {
         }}
       >
         <Stack.Screen name="(tabs)" />
-        <Stack.Screen
-          name="quran-download"
-          options={{ presentation: "modal" }}
-        />
       </Stack>
     </>
   );

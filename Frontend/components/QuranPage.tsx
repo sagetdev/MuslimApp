@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import * as Font from "expo-font";
+import { loadHafsFont, loadPageFont, pageFont, setFontPriority } from "../src/lib/quranFonts";
 import Slider from "@react-native-community/slider";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -15,7 +15,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { getSurahForPage, TOTAL_PAGES } from "../src/data/pageToSurah";
 import { apiFetch } from "../src/lib/api";
 import createQuranStyles from "../src/styles/quran.styles";
-import { setPriorityPage } from "../src/lib/quranPreloader";
 import { useAppTheme } from "../src/theme/ThemeProvider";
 
 type Word = { code: string | null; text: string | null; kind: "word" | "end"; page: number };
@@ -23,29 +22,8 @@ type Line = { number: number; words: Word[] };
 type Header = { type: "banner"; name: string; surahNumber?: number } | { type: "bismillah" };
 type MushafPageData = { page: number; lines: Line[]; headers: Record<string, Header> };
 
-const FONT_CDN = "https://verses.quran.foundation/fonts/quran/hafs";
 const FONT_RATIO = 0.058;
 const BISMILLAH = "بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ";
-
-const fontPromises = new Map<string, Promise<void>>();
-
-function ensureFont(name: string, uri: string): Promise<void> {
-  let promise = fontPromises.get(name);
-  if (!promise) {
-    promise = Font.loadAsync({ [name]: { uri } }).catch((error) => {
-      fontPromises.delete(name);
-      throw error;
-    });
-    fontPromises.set(name, promise);
-  }
-  return promise;
-}
-
-const pageFont = (page: number) => `QCF2_P${page}`;
-const loadPageFont = (page: number) =>
-  ensureFont(pageFont(page), `${FONT_CDN}/v2/ttf/p${page}.ttf`);
-const loadHafsFont = () =>
-  ensureFont("UthmanicHafs", `${FONT_CDN}/uthmanic_hafs/UthmanicHafs1Ver18.ttf`);
 
 const ALL_PAGES = Array.from({ length: TOTAL_PAGES }, (_, i) => i + 1);
 
@@ -75,43 +53,45 @@ function MushafPageItem({
   const lineHeight = fontSize * 1.8;
   const totalLines = 15;
 
-  useEffect(() => {
-    let active = true;
-    setLoading(true);
-    setError(null);
+    useEffect(() => {
+        let active = true;
+        setLoading(true);
+        setError(null);
 
-    (async () => {
-      try {
-        const [response] = await Promise.all([
+        (async () => {
+        try {
+            const [response] = await Promise.all([
             apiFetch<{ data: MushafPageData }>(`/mushaf/pages/${page}`, {
                 priority: "high",
             }),
             loadHafsFont(),
             loadPageFont(page),
-        ]);
+            ]);
 
-        const result = response?.data;
-        if (!result?.lines) {
-        throw new Error("Réponse invalide du serveur (pas de lignes).");
+            const result = response?.data;
+            if (!result?.lines) {
+            throw new Error("Réponse invalide du serveur (pas de lignes).");
+            }
+            const pages = new Set(
+            result.lines.flatMap((line) => line.words.map((word) => word.page))
+            );
+            await Promise.all([...pages].map(loadPageFont));
+
+            if (!active) return;
+            setData(result);
+        } catch (caught) {
+            if (!active) return;
+            setData(null);
+            setError(caught instanceof Error ? caught.message : "Erreur de chargement.");
+        } finally {
+            if (active) setLoading(false);
         }
-        const pages = new Set(result.lines.flatMap((line) => line.words.map((word) => word.page)));
-        await Promise.all([...pages].map(loadPageFont));
+        })();
 
-        if (!active) return;
-        setData(result);
-      } catch (caught) {
-        if (!active) return;
-        setData(null);
-        setError(caught instanceof Error ? caught.message : "Erreur de chargement.");
-      } finally {
-        if (active) setLoading(false);
-      }
-    })();
-
-    return () => {
-      active = false;
-    };
-  }, [page, reloadKey]);
+        return () => {
+        active = false;
+        };
+    }, [page, reloadKey]);
 
   // Nom de la sourate (issu du banner si présent, sinon null)
   const pageSurahName = useMemo(() => {
@@ -305,19 +285,19 @@ export default function QuranPage({ initialPage = 1, onClose }: Props) {
     const page = Math.round(value);
     const index = page - 1;
     if (flatListRef.current && index >= 0 && index < TOTAL_PAGES) {
-      flatListRef.current.scrollToIndex({ index, animated: true });
+      flatListRef.current.scrollToIndex({ index, animated: false });
     }
   }, []);
 
   // Numéro de la sourate actuelle, calculé à partir de la page courante
   // Sourate actuelle (numéro + nom) calculée à partir de la page courante
-const currentSurah = useMemo(
-  () => getSurahForPage(currentPage),
-  [currentPage]
-);
+    const currentSurah = useMemo(
+    () => getSurahForPage(currentPage),
+    [currentPage]
+    );
 
-  useEffect(() => {
-    setPriorityPage(currentPage);
+    useEffect(() => {
+        setFontPriority(currentPage);
     }, [currentPage]);
 
   return (
@@ -357,6 +337,8 @@ const currentSurah = useMemo(
         data={ALL_PAGES}
         horizontal
         pagingEnabled
+        initialNumToRender={1}
+        updateCellsBatchingPeriod={80}
         showsHorizontalScrollIndicator={false}
         initialScrollIndex={initialPage - 1}
         getItemLayout={(_, index) => ({

@@ -1,6 +1,7 @@
 // src/lib/api.ts
 import { httpSemaphore, type Priority } from "./concurrency";
 import { getCachedPage, setCachedPage } from "./quranCache";
+import { getOfflinePage } from "./quranOffline";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -122,6 +123,9 @@ export async function apiFetch<T = unknown>(
 
   // ---------- 1. Lecture cache ----------
   if (pageNumber !== null && !noCache) {
+    const offline = await getOfflinePage<T>(pageNumber);
+    if (offline) return offline;
+
     const cached = await getCachedPage<T>(pageNumber);
     if (cached) return cached;
   }
