@@ -127,7 +127,10 @@ export default function QuranReaderScreen() {
   const params = useLocalSearchParams<{ surah?: string | string[] }>();
   const router = useRouter();
   const initial = Array.isArray(params.surah) ? params.surah[0] : params.surah;
-  const [input, setInput] = useState(initial ?? "1");\n  const [surahSearch, setSurahSearch] = useState("");\n  const [showSurahList, setShowSurahList] = useState(false);\n  const [showJuzList, setShowJuzList] = useState(false);
+  const [input, setInput] = useState(initial ?? "1");
+  const [surahSearch, setSurahSearch] = useState("");
+  const [showSurahList, setShowSurahList] = useState(false);
+  const [showJuzList, setShowJuzList] = useState(false);
   const [surah, setSurah] = useState<Surah | null>(null);
   const [verses, setVerses] = useState<Record<string, unknown>[]>([]);
   const [favorites, setFavorites] = useState<number[]>([]);
