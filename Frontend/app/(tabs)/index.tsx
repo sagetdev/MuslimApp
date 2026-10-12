@@ -185,22 +185,16 @@ export default function DashboardScreen() {
   }).format(new Date());
 
   function openFeature(title: string) {
-    const routeByTitle: Record<string, "/quran-reader" | "/prayer" | "/qibla" | "/adhkar" | "/explore"> = {
+    const routeByTitle: Record<string, "/quran-reader" | "/prayer" | "/qibla" | "/adhkar" | "/hadith" | "/names" | "/explore"> = {
       "Le Coran": "/quran-reader",
       Horaires: "/prayer",
       "Horaires de prière": "/prayer",
       Qibla: "/qibla",
-      Hadiths: "/explore",
+      Hadiths: "/hadith",
       Invocations: "/adhkar",
-      "99 noms d'Allah": "/explore",
+      "99 noms d'Allah": "/names",
     };
-    const route = routeByTitle[title] ?? "/explore";
-    if (route === "/explore") {
-      const moduleByTitle: Record<string, string> = { Hadiths: "hadith", "99 noms d'Allah": "names" };
-      router.push({ pathname: "/explore", params: { module: moduleByTitle[title] ?? "quran" } });
-      return;
-    }
-    router.push(route);
+    router.push(routeByTitle[title] ?? "/explore");
   }
 
   return (
