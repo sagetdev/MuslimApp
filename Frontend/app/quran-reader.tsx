@@ -147,7 +147,11 @@ export default function QuranReaderScreen() {
     await AsyncStorage.setItem(FAVORITES_KEY, JSON.stringify(next));
   };
 
-  if (readingMode === "pages") {
+  // Appel via une fonction pour éviter que TypeScript ne réduise readingMode à "verses"
+  // dans le JSX qui suit et signale à tort les comparaisons utilisées pour les boutons.
+  const isPagesMode = () => readingMode === "pages";
+
+  if (isPagesMode()) {
     return (
       <QuranPage
         initialPage={1}
