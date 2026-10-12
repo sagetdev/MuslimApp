@@ -14,6 +14,7 @@ export type ResourceConfig = {
   searchEndpoint?: string;
   searchParam?: string;
   initialSearch?: boolean;
+  includeTimezone?: boolean;
 };
 
 function unwrapResponse(value: unknown): unknown {
@@ -81,7 +82,9 @@ export default function ResourceScreen({ config }: { config: ResourceConfig }) {
       const search = searchText.trim();
       const result = config.searchEndpoint && search
         ? await apiFetch<unknown>(config.searchEndpoint, { params: { [config.searchParam ?? "q"]: search, limit: 25 } })
-        : await apiFetch<unknown>(config.endpoint);
+        : await apiFetch<unknown>(config.endpoint, config.includeTimezone
+            ? { params: { timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC" } }
+            : undefined);
       setData(unwrapResponse(result));
       setLoaded(true);
     } catch (caught) {
