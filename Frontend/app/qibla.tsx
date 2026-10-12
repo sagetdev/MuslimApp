@@ -3,14 +3,206 @@ import * as Location from "expo-location";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { apiFetch } from "../../src/lib/api";
-import { useAppTheme } from "../../src/theme/ThemeProvider";
-function findBearing(value:unknown):number|null{if(!value||typeof value!=="object")return null;if(Array.isArray(value)){for(const x of value){const n=findBearing(x);if(n!==null)return n;}return null;}const o=value as Record<string,unknown>;for(const k of ["direction","bearing","qibla","angle","degrees"]){const v=o[k];if(typeof v==="number"&&Number.isFinite(v))return (v%360+360)%360;if(typeof v==="string"&&v.trim()!==""&&Number.isFinite(Number(v)))return (Number(v)%360+360)%360;}for(const v of Object.values(o)){const n=findBearing(v);if(n!==null)return n;}return null;}
-export default function QiblaScreen(){const {colors}=useAppTheme();const [bearing,setBearing]=useState<number|null>(null);const [heading,setHeading]=useState<number|null>(null);const [status,setStatus]=useState("Autorise la localisation pour déterminer la direction.");const [loading,setLoading]=useState(false);
- useEffect(()=>{let subscription:Location.LocationSubscription|undefined;let active=true;void(async()=>{setLoading(true);try{const permission=await Location.requestForegroundPermissionsAsync();if(permission.status!=="granted")throw new Error("Permission de localisation refusée. Tu peux la réactiver dans les réglages de ton appareil.");const pos=await Location.getCurrentPositionAsync({});const result=await apiFetch<unknown>("/qibla",{params:{lat:pos.coords.latitude,lng:pos.coords.longitude}});if(!active)return;const value=findBearing(result);if(value===null)throw new Error("La réponse du service Qibla ne contient pas de direction reconnue.");setBearing(value);setStatus("Direction calculée. Oriente le haut de ton appareil vers la flèche.");subscription=await Location.watchHeadingAsync(h=>{if(active&&Number.isFinite(h.trueHeading)&&h.trueHeading>=0)setHeading(h.trueHeading);});}catch(e){if(active)setStatus(e instanceof Error?e.message:"Impossible de calculer la Qibla.");}finally{if(active)setLoading(false);}})();return()=>{active=false;subscription?.remove();};},[]);
- const relative=bearing!==null&&heading!==null?(bearing-heading+360)%360:bearing??0;
- return <SafeAreaView style={{flex:1,backgroundColor:colors.background}} edges={["top","left","right"]}><ScrollView contentContainerStyle={{padding:20,paddingBottom:36,gap:20,alignItems:"center",maxWidth:760,width:"100%",alignSelf:"center"}}><View style={{width:"100%",gap:7}}><Text style={{color:colors.primary,fontSize:10,fontWeight:"900",letterSpacing:1.8}}>ORIENTATION</Text><Text style={{color:colors.text,fontSize:30,fontWeight:"800"}}>Direction de la Qibla</Text><Text style={{color:colors.muted,lineHeight:21}}>Une boussole guidée par la position et le cap de ton appareil.</Text></View>
- <View style={{width:280,height:280,borderRadius:140,borderWidth:1,borderColor:colors.border,backgroundColor:colors.surface,alignItems:"center",justifyContent:"center",marginTop:12}}><View style={{position:"absolute",top:20}}><Text style={{color:colors.muted,fontWeight:"800"}}>N</Text></View><View style={{width:220,height:220,borderRadius:110,borderWidth:1,borderColor:colors.border,alignItems:"center",justifyContent:"center",transform:[{rotate:`${- (heading??0)}deg`}]}}><View style={{position:"absolute",top:7,width:2,height:206,backgroundColor:colors.border}}/><View style={{width:76,height:76,borderRadius:38,backgroundColor:colors.surfaceAlt,alignItems:"center",justifyContent:"center"}}><Ionicons name="compass" size={45} color={colors.primary}/></View></View><View style={{position:"absolute",width:4,height:105,alignItems:"center",justifyContent:"flex-start",transform:[{rotate:`${relative}deg`} ]}}><Ionicons name="navigate" size={36} color={colors.primary}/></View></View>
- <View style={{width:"100%",backgroundColor:colors.surface,borderColor:colors.border,borderWidth:1,borderRadius:22,padding:20,alignItems:"center",gap:8}}>{loading?<ActivityIndicator color={colors.primary}/>:null}<Text style={{color:colors.muted,fontSize:12}}>ANGLE DE LA QIBLA</Text><Text style={{color:colors.text,fontSize:34,fontWeight:"900"}}>{bearing===null?"—":`${Math.round(bearing)}°`}</Text><Text style={{color:colors.muted,textAlign:"center",lineHeight:21}}>{status}</Text>{heading===null&&bearing!==null?<Text style={{color:colors.muted,fontSize:11,textAlign:"center"}}>Le cap du compas n’est pas disponible sur cet appareil. La direction géographique reste affichée, mais la rotation en temps réel ne peut pas être garantie.</Text>:null}<Pressable onPress={()=>{setBearing(null);setHeading(null);setStatus("Relance l’écran pour réessayer.");}} style={{padding:12}}><Text style={{color:colors.primary,fontWeight:"800"}}>Réinitialiser</Text></Pressable></View>
- </ScrollView></SafeAreaView>;
+import { apiFetch } from "../src/lib/api";
+import { useAppTheme } from "../src/theme/ThemeProvider";
+
+function findBearing(value: unknown): number | null {
+  if (!value || typeof value !== "object") return null;
+  if (Array.isArray(value)) {
+    for (const x of value) {
+      const n = findBearing(x);
+      if (n !== null) return n;
+    }
+    return null;
+  }
+  const o = value as Record<string, unknown>;
+  for (const k of ["direction", "bearing", "qibla", "angle", "degrees"]) {
+    const v = o[k];
+    if (typeof v === "number" && Number.isFinite(v)) return ((v % 360) + 360) % 360;
+    if (typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v)))
+      return ((Number(v) % 360) + 360) % 360;
+  }
+  for (const v of Object.values(o)) {
+    const n = findBearing(v);
+    if (n !== null) return n;
+  }
+  return null;
+}
+
+export default function QiblaScreen() {
+  const { colors } = useAppTheme();
+  const [bearing, setBearing] = useState<number | null>(null);
+  const [heading, setHeading] = useState<number | null>(null);
+  const [status, setStatus] = useState("Autorise la localisation pour déterminer la direction.");
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let subscription: Location.LocationSubscription | undefined;
+    let active = true;
+
+    void (async () => {
+      setLoading(true);
+      try {
+        const permission = await Location.requestForegroundPermissionsAsync();
+        if (permission.status !== "granted") {
+          throw new Error(
+            "Permission de localisation refusée. Tu peux la réactiver dans les réglages de ton appareil."
+          );
+        }
+        const pos = await Location.getCurrentPositionAsync({});
+        const result = await apiFetch<unknown>("/qibla", {
+          params: { lat: pos.coords.latitude, lng: pos.coords.longitude },
+        });
+        if (!active) return;
+
+        const value = findBearing(result);
+        if (value === null) {
+          throw new Error("La réponse du service Qibla ne contient pas de direction reconnue.");
+        }
+        setBearing(value);
+        setStatus("Direction calculée. Oriente le haut de ton appareil vers la flèche.");
+
+        subscription = await Location.watchHeadingAsync((h) => {
+          if (active && Number.isFinite(h.trueHeading) && h.trueHeading >= 0) {
+            setHeading(h.trueHeading);
+          }
+        });
+      } catch (e) {
+        if (active) {
+          setStatus(e instanceof Error ? e.message : "Impossible de calculer la Qibla.");
+        }
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+
+    return () => {
+      active = false;
+      subscription?.remove();
+    };
+  }, []);
+
+  const relative =
+    bearing !== null && heading !== null ? (bearing - heading + 360) % 360 : bearing ?? 0;
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={["top", "left", "right"]}>
+      <ScrollView
+        contentContainerStyle={{
+          padding: 20,
+          paddingBottom: 36,
+          gap: 20,
+          alignItems: "center",
+          maxWidth: 760,
+          width: "100%",
+          alignSelf: "center",
+        }}
+      >
+        <View style={{ width: "100%", gap: 7 }}>
+          <Text style={{ color: colors.primary, fontSize: 10, fontWeight: "900", letterSpacing: 1.8 }}>
+            ORIENTATION
+          </Text>
+          <Text style={{ color: colors.text, fontSize: 30, fontWeight: "800" }}>
+            Direction de la Qibla
+          </Text>
+          <Text style={{ color: colors.muted, lineHeight: 21 }}>
+            Une boussole guidée par la position et le cap de ton appareil.
+          </Text>
+        </View>
+
+        <View
+          style={{
+            width: 280,
+            height: 280,
+            borderRadius: 140,
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: colors.surface,
+            alignItems: "center",
+            justifyContent: "center",
+            marginTop: 12,
+          }}
+        >
+          <View style={{ position: "absolute", top: 20 }}>
+            <Text style={{ color: colors.muted, fontWeight: "800" }}>N</Text>
+          </View>
+          <View
+            style={{
+              width: 220,
+              height: 220,
+              borderRadius: 110,
+              borderWidth: 1,
+              borderColor: colors.border,
+              alignItems: "center",
+              justifyContent: "center",
+              transform: [{ rotate: `${heading ?? 0}deg` }],
+            }}
+          >
+            <View style={{ position: "absolute", top: 7, width: 2, height: 206, backgroundColor: colors.border }} />
+            <View
+              style={{
+                width: 76,
+                height: 76,
+                borderRadius: 38,
+                backgroundColor: colors.surfaceAlt,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Ionicons name="compass" size={45} color={colors.primary} />
+            </View>
+          </View>
+          <View
+            style={{
+              position: "absolute",
+              width: 4,
+              height: 105,
+              alignItems: "center",
+              justifyContent: "flex-start",
+              transform: [{ rotate: `${relative}deg` }],
+            }}
+          >
+            <Ionicons name="navigate" size={36} color={colors.primary} />
+          </View>
+        </View>
+
+        <View
+          style={{
+            width: "100%",
+            backgroundColor: colors.surface,
+            borderColor: colors.border,
+            borderWidth: 1,
+            borderRadius: 22,
+            padding: 20,
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          {loading ? <ActivityIndicator color={colors.primary} /> : null}
+          <Text style={{ color: colors.muted, fontSize: 12 }}>ANGLE DE LA QIBLA</Text>
+          <Text style={{ color: colors.text, fontSize: 34, fontWeight: "900" }}>
+            {bearing === null ? "—" : `${Math.round(bearing)}°`}
+          </Text>
+          <Text style={{ color: colors.muted, textAlign: "center", lineHeight: 21 }}>
+            {status}
+          </Text>
+          {heading === null && bearing !== null ? (
+            <Text style={{ color: colors.muted, fontSize: 11, textAlign: "center" }}>
+              Le cap du compas n’est pas disponible sur cet appareil. La direction géographique reste affichée, mais la rotation en temps réel ne peut pas être garantie.
+            </Text>
+          ) : null}
+          <Pressable
+            onPress={() => {
+              setBearing(null);
+              setHeading(null);
+              setStatus("Relance l’écran pour réessayer.");
+            }}
+            style={{ padding: 12 }}
+          >
+            <Text style={{ color: colors.primary, fontWeight: "800" }}>Réinitialiser</Text>
+          </Pressable>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
 }
