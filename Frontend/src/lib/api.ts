@@ -212,7 +212,7 @@ export async function apiFetch<T = unknown>(
   // Déduplication : on enregistre la promesse pour les GET
   if (method === "GET") {
     inflight.set(dedupKey, task);
-    task.finally(() => inflight.delete(dedupKey));
+    // Do not create an ignored rejected promise: `finally` would surface an unhandled rejection.\n    void task.then(\n      () => inflight.delete(dedupKey),\n      () => inflight.delete(dedupKey)\n    );
   }
   
   if (__DEV__) {
