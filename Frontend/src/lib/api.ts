@@ -182,9 +182,21 @@ export async function apiFetch<T = unknown>(
         const responseText = await response.text().catch(() => "");
         let message = responseText;
         try {
-          const parsed = JSON.parse(responseText);
+          const parsed = JSON.parse(responseText) as Record<string, unknown>;
+          const nestedError =
+            parsed.error && typeof parsed.error === "object"
+              ? (parsed.error as Record<string, unknown>)
+              : undefined;
+          const candidate =
+            parsed.message ??
+            parsed.detail ??
+            nestedError?.message ??
+            (typeof parsed.error === "string" ? parsed.error : undefined) ??
+            responseText;
           message =
-            parsed.message ?? parsed.error ?? parsed.detail ?? responseText;
+            typeof candidate === "string"
+              ? candidate
+              : JSON.stringify(candidate);
         } catch {}
         throw new Error(
           `Erreur API ${response.status}${message ? ` : ${message}` : ""}`
