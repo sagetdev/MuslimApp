@@ -112,10 +112,9 @@ async function downloadBundle(): Promise<void> {
     console.log(`✅ ${bundle.pages.length} pages`);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.warn(`⚠️ Bundle non téléchargé (${message}). Placeholder vide écrit.`);
-    if (!(await exists(bundlePath))) {
-      await fs.writeFile(bundlePath, JSON.stringify({ version: 0, pages: [] }));
-    }
+    throw new Error(
+      `Impossible d'intégrer le Coran hors ligne au build (${message}). Vérifie EXPO_PUBLIC_API_URL et /api/mushaf/all-pages.`
+    );
   }
 }
 
