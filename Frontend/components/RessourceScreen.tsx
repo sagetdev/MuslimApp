@@ -63,11 +63,11 @@ function getTitle(item: RecordValue, index: number): string {
 }
 
 function getArabic(item: RecordValue): string {
-  return getText(item, ["arabic", "arabicText", "textArabic", "text_ar", "text_arabic", "arabic_text", "nameArabic", "arabicName", "ar", "duaArabic", "dua_arabic", "hadithArabic"]);
+  return getText(item, ["arabic", "arabicText", "textArabic", "text_ar", "text_arabic", "arabic_text", "nameArabic", "arabicName", "ar", "duaArabic", "dua_arabic", "hadithArabic", "dua"]);
 }
 
 function getMeaning(item: RecordValue): string {
-  return getText(item, ["translation", "meaning", "meaningEnglish", "englishMeaning", "text", "textEnglish", "text_english", "english", "description", "explanation", "hadithEnglish", "dua"]);
+  return getText(item, ["translation", "meaning", "meaningEnglish", "englishMeaning", "text", "textEnglish", "text_english", "english", "description", "explanation", "hadithEnglish"]);
 }
 
 function humanize(key: string): string {
@@ -134,7 +134,7 @@ function DetailCard({ item, kind, onClose, onPrevious, onNext }: {
   const title = getTitle(item, 0);
   const arabic = getArabic(item);
   const meaning = getMeaning(item);
-  const excluded = new Set(["id", "_id", "title", "name", "nameEnglish", "english", "translation", "meaning", "meaningEnglish", "englishMeaning", "text", "textEnglish", "arabic", "arabicText", "textArabic", "text_ar", "text_arabic", "arabic_text", "nameArabic", "arabicName", "ar", "duaArabic", "dua_arabic", "hadithArabic"]);
+  const excluded = new Set(["id", "_id", "title", "name", "nameEnglish", "english", "translation", "meaning", "meaningEnglish", "englishMeaning", "text", "textEnglish", "arabic", "arabicText", "textArabic", "text_ar", "text_arabic", "arabic_text", "nameArabic", "arabicName", "ar", "duaArabic", "dua_arabic", "hadithArabic", "dua"]);
   const details = Object.entries(item).filter(([key, value]) => !excluded.has(key) && value !== undefined && value !== null && value !== "");
   return (
     <View style={{ borderRadius: 24, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, padding: 20, gap: 17 }}>
