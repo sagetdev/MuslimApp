@@ -140,7 +140,6 @@ export default function QuranReaderScreen() {
   const initial = Array.isArray(params.surah) ? params.surah[0] : params.surah;
   const [input, setInput] = useState(initial ?? "1");
   const [surahSearch, setSurahSearch] = useState("");
-  const [showSurahList, setShowSurahList] = useState(false);
   const [showJuzList, setShowJuzList] = useState(false);
   const [surah, setSurah] = useState<Surah | null>(null);
   const [verses, setVerses] = useState<Record<string, unknown>[]>([]);
@@ -190,11 +189,14 @@ export default function QuranReaderScreen() {
       }
       setSurah(parsed);
       setVerses(ayahs);
-      setSelectedVerse(0);
+      const startVerse = Math.max(1, Math.min(ayahs.length, verseNumber));
+      setSelectedVerse(startVerse - 1);
       setInput(String(number));
+      setSurahSearch("");
+      setShowJuzList(false);
       await AsyncStorage.setItem(
         LAST_READ_KEY,
-        JSON.stringify({ surah: number, verse: 1, updatedAt: new Date().toISOString() })
+        JSON.stringify({ surah: number, verse: startVerse, updatedAt: new Date().toISOString() })
       );
     } catch (e) {
       // Garde une trace exploitable même si l'erreur est interceptée par l'écran.
@@ -353,57 +355,50 @@ export default function QuranReaderScreen() {
             </Pressable>
           </View>
 
-          <View style={{ flexDirection: "row", gap: 10 }}>
-            <TextInput
-              accessibilityLabel="Rechercher une sourate par nom"
-              accessibilityHint="Saisissez un nom comme Yasin ou Al-Baqara"
-              value={surahSearch}
-              onChangeText={(value) => {
-                setSurahSearch(value);
-                setShowSurahList(true);
-                setShowJuzList(false);
-              }}
-              placeholder="Rechercher par nom…"
-              placeholderTextColor={colors.muted}
-              autoCapitalize="none"
-              style={{ flex: 1, color: colors.text, backgroundColor: colors.surfaceAlt, borderRadius: 12, paddingHorizontal: 13, paddingVertical: 11 }}
-            />
+          <View style={{ flexDirection: "row", gap: 10, alignItems: "center" }}>
+            <View style={{ flex: 1, position: "relative" }}>
+              <TextInput
+                accessibilityLabel="Rechercher une sourate par nom"
+                accessibilityHint="Saisissez un nom comme Yasin ou Al-Baqara"
+                value={surahSearch}
+                onChangeText={(value) => {
+                  setSurahSearch(value);
+                  setShowJuzList(false);
+                }}
+                placeholder="Rechercher une sourate…"
+                placeholderTextColor={colors.muted}
+                autoCapitalize="none"
+                returnKeyType="search"
+                style={{ color: colors.text, backgroundColor: colors.surfaceAlt, borderRadius: 12, paddingHorizontal: 13, paddingVertical: 11 }}
+              />
+            </View>
             <TextInput
               accessibilityLabel="Numéro de sourate"
+              accessibilityHint="Saisissez un numéro de 1 à 114 puis validez"
               value={input}
               onChangeText={setInput}
+              onSubmitEditing={() => void loadSurah(Number(input))}
               keyboardType="number-pad"
+              returnKeyType="go"
               maxLength={3}
               style={{ color: colors.text, backgroundColor: colors.surfaceAlt, borderRadius: 12, width: 58, textAlign: "center", padding: 10, fontWeight: "800" }}
             />
-            <Pressable onPress={() => void loadSurah(Number(input))} style={styles.action}>
-              <Text style={{ color: colors.primaryText, fontWeight: "800" }}>Ouvrir</Text>
-            </Pressable>
           </View>
 
-          <View style={{ flexDirection: "row", gap: 10 }}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ expanded: showSurahList }}
-              onPress={() => { setShowSurahList((v) => !v); setShowJuzList(false); }}
-              style={[styles.action, { flex: 1, backgroundColor: showSurahList ? colors.primary : colors.surfaceAlt }]}
-            >
-              <Text style={{ color: showSurahList ? colors.primaryText : colors.text, fontWeight: "800" }}>Liste des sourates</Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ expanded: showJuzList }}
-              onPress={() => { setShowJuzList((v) => !v); setShowSurahList(false); }}
-              style={[styles.action, { flex: 1, backgroundColor: showJuzList ? colors.primary : colors.surfaceAlt }]}
-            >
-              <Text style={{ color: showJuzList ? colors.primaryText : colors.text, fontWeight: "800" }}>Explorer les Juz</Text>
-            </Pressable>
-          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ expanded: showJuzList }}
+            onPress={() => setShowJuzList((value) => !value)}
+            style={[styles.action, { backgroundColor: showJuzList ? colors.primary : colors.surfaceAlt }]}
+          >
+            <Text style={{ color: showJuzList ? colors.primaryText : colors.text, fontWeight: "800" }}>
+              {showJuzList ? "Masquer les Juz" : "Explorer les Juz"}
+            </Text>
+          </Pressable>
 
-          {showSurahList ? (
+          {surahSearch.trim().length > 0 ? (
             <View style={{ gap: 8 }}>
-              <Text style={[styles.muted, { fontSize: 12 }]}>Sélectionnez une sourate dans la liste des 114 sourates.</Text>
-              <ScrollView nestedScrollEnabled style={{ maxHeight: 300 }} keyboardShouldPersistTaps="handled">
+              <ScrollView nestedScrollEnabled style={{ maxHeight: 220 }} keyboardShouldPersistTaps="handled">
                 {SURAHS.filter((item) => {
                   const query = normalizeSurahSearch(surahSearch);
                   if (!query) return true;
@@ -418,7 +413,10 @@ export default function QuranReaderScreen() {
                     key={item.number}
                     accessibilityRole="button"
                     accessibilityLabel={`Sourate ${item.number}, ${item.name}, ${item.verses} versets`}
-                    onPress={() => { setSurahSearch(""); void loadSurah(item.number); }}
+                    onPress={() => {
+                      setSurahSearch("");
+                      void loadSurah(item.number);
+                    }}
                     style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10, paddingHorizontal: 8, borderRadius: 10, backgroundColor: Number(input) === item.number ? colors.surfaceAlt : "transparent" }}
                   >
                     <View style={{ width: 34, height: 34, alignItems: "center", justifyContent: "center", borderRadius: 10, backgroundColor: colors.surfaceAlt }}>
