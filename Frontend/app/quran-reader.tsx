@@ -90,7 +90,8 @@ const JUZ_STARTS: Array<{ juz: number; surah: number; verse: number }> = [
   { juz: 27, surah: 51, verse: 31 }, { juz: 28, surah: 58, verse: 1 },
   { juz: 29, surah: 67, verse: 1 }, { juz: 30, surah: 78, verse: 1 },
 ];
-\nconst FAVORITES_KEY = "muslimapp:quran:favorites:v1";
+
+const FAVORITES_KEY = "muslimapp:quran:favorites:v1";
 const LAST_READ_KEY = "muslimapp:quran:last-read:v1";
 
 function objectValue(value: unknown): Record<string, unknown> {
