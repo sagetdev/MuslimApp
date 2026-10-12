@@ -1,4 +1,3 @@
-
 import {
   createContext,
   useContext,
@@ -10,27 +9,27 @@ export type ThemeMode = "dark" | "light";
 
 const palettes = {
   dark: {
-    background: "#0B1220",
-    surface: "#141E30",
-    surfaceAlt: "#1B2940",
-    text: "#F5F7FB",
-    muted: "#9BA9BD",
-    primary: "#D8B56D",
-    primaryText: "#0B1220",
-    border: "#29374C",
-    success: "#65C99A",
-    tabBar: "#101827",
+    background: "#08140F",
+    surface: "#102119",
+    surfaceAlt: "#172D22",
+    text: "#F4F3E9",
+    muted: "#A6B6AA",
+    primary: "#D5B879",
+    primaryText: "#102016",
+    border: "#294336",
+    success: "#83C9A0",
+    tabBar: "#0D1C14",
   },
   light: {
-    background: "#F5F7F4",
+    background: "#F6F5EF",
     surface: "#FFFFFF",
-    surfaceAlt: "#EAF0E9",
-    text: "#17251F",
-    muted: "#68786F",
-    primary: "#197653",
+    surfaceAlt: "#EEF1E8",
+    text: "#17281F",
+    muted: "#69796F",
+    primary: "#216B4B",
     primaryText: "#FFFFFF",
-    border: "#DCE5DD",
-    success: "#197653",
+    border: "#DCE4DA",
+    success: "#216B4B",
     tabBar: "#FFFFFF",
   },
 };
@@ -53,13 +52,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <ThemeContext.Provider
-      value={{
-        mode,
-        colors: palettes[mode],
-        toggleTheme,
-      }}
-    >
+    <ThemeContext.Provider value={{ mode, colors: palettes[mode], toggleTheme }}>
       {children}
     </ThemeContext.Provider>
   );
