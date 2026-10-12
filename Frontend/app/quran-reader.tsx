@@ -148,14 +148,14 @@ export default function QuranReaderScreen() {
   const [error, setError] = useState("");
   const [translation, setTranslation] = useState(true);
   const [fontSize, setFontSize] = useState(28);
-  const [selectedVerse, setSelectedVerse] = useState(0);
   const [readingMode, setReadingMode] = useState<"verses" | "pages">("verses");
 
   useEffect(() => {
     void AsyncStorage.getItem(FAVORITES_KEY).then((raw) => {
       if (raw) {
         try {
-          setFavorites(JSON.parse(raw) as number[]);
+          const saved = JSON.parse(raw);
+          setFavorites(Array.isArray(saved) ? saved.filter((item): item is number => Number.isInteger(item) && item >= 1 && item <= 114) : []);
         } catch {}
       }
     });
@@ -190,7 +190,6 @@ export default function QuranReaderScreen() {
       setSurah(parsed);
       setVerses(ayahs);
       const startVerse = Math.max(1, Math.min(ayahs.length, verseNumber));
-      setSelectedVerse(startVerse - 1);
       setInput(String(number));
       setSurahSearch("");
       setShowJuzList(false);
@@ -243,9 +242,8 @@ export default function QuranReaderScreen() {
     [colors]
   );
 
-  const toggleFavorite = async (index: number) => {
-    const id = Number(surah?.number ?? surah?.id ?? Number(input)) * 1000 + index + 1;
-    const next = favorites.includes(id) ? favorites.filter((item) => item !== id) : [...favorites, id];
+  const toggleFavoriteSurah = async (number: number) => {
+    const next = favorites.includes(number) ? favorites.filter((item) => item !== number) : [...favorites, number].sort((a, b) => a - b);
     setFavorites(next);
     await AsyncStorage.setItem(FAVORITES_KEY, JSON.stringify(next));
   };
@@ -456,6 +454,26 @@ export default function QuranReaderScreen() {
           ) : null}
         </View>
 
+        <View style={[styles.card, { gap: 12 }]}>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+            <View style={{ flex: 1, gap: 3 }}><Text style={[styles.text, { fontWeight: "800", fontSize: 16 }]}>Sourates favorites</Text><Text style={[styles.muted, { fontSize: 12 }]}>Enregistre une sourate entière pour la retrouver ici.</Text></View>
+            <Pressable accessibilityRole="button" accessibilityLabel={favorites.includes(Number(input)) ? "Retirer cette sourate des favoris" : "Enregistrer cette sourate en favori"} onPress={() => void toggleFavoriteSurah(Number(input))} style={{ padding: 10, borderRadius: 12, backgroundColor: colors.surfaceAlt }}><Ionicons name={favorites.includes(Number(input)) ? "bookmark" : "bookmark-outline"} size={23} color={colors.primary} /></Pressable>
+          </View>
+          {favorites.length === 0 ? <Text style={[styles.muted, { fontSize: 13, lineHeight: 20 }]}>Aucune sourate enregistrée pour le moment. Appuie sur le signet pour ajouter la sourate affichée.</Text> : (
+            <View style={{ gap: 6 }}>{favorites.map((number) => {
+              const item = SURAHS[number - 1];
+              if (!item) return null;
+              return <View key={number} style={{ flexDirection: "row", alignItems: "center", gap: 10, padding: 10, borderRadius: 12, backgroundColor: Number(input) === number ? colors.surfaceAlt : "transparent" }}>
+                <Pressable accessibilityRole="button" accessibilityLabel={"Lire la sourate " + item.name} onPress={() => void loadSurah(number)} style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 10 }}>
+                  <View style={{ width: 34, height: 34, alignItems: "center", justifyContent: "center", borderRadius: 10, backgroundColor: colors.surfaceAlt }}><Text style={[styles.text, { fontWeight: "800" }]}>{item.number}</Text></View>
+                  <View style={{ flex: 1, gap: 2 }}><Text style={[styles.text, { fontWeight: "700" }]}>{item.name}</Text><Text style={[styles.muted, { fontSize: 11 }]}>{item.verses} versets</Text></View>
+                  <Text style={[styles.text, { fontSize: 20 }]}>{item.arabic}</Text>
+                </Pressable>
+                <Pressable accessibilityRole="button" accessibilityLabel={"Retirer " + item.name + " des favoris"} onPress={() => void toggleFavoriteSurah(number)} style={{ padding: 7 }}><Ionicons name="bookmark" size={19} color={colors.primary} /></Pressable>
+              </View>;
+            })}</View>
+          )}
+        </View>
 
         {readingMode === "verses" ? <View style={[styles.card, { gap: 14 }]}>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
@@ -521,53 +539,14 @@ export default function QuranReaderScreen() {
             </View>
           ) : (
             verses.map((verse, index) => {
-              const id = Number(surah?.number ?? surah?.id ?? Number(input)) * 1000 + index + 1;
               const arabic = firstText(verse, ["text", "arabic", "text_uthmani", "arabicText", "textArabic"]);
               const translations = objectValue(verse.translations);
               const translated =
                 firstText(verse, ["translation", "translationText", "text_translation", "english", "meaning"]) ||
                 firstText(translations, ["french", "sahih_international"]);
-              const isCurrent = selectedVerse === index;
-
               return (
-                <Pressable
-                  key={id}
-                  onPress={() => {
-                    setSelectedVerse(index);
-                    void AsyncStorage.setItem(
-                      LAST_READ_KEY,
-                      JSON.stringify({
-                        surah: Number(input),
-                        verse: index + 1,
-                        updatedAt: new Date().toISOString(),
-                      })
-                    );
-                  }}
-                  style={{
-                    paddingVertical: 15,
-                    paddingHorizontal: 12,
-                    gap: 13,
-                    borderRadius: 16,
-                    backgroundColor: isCurrent ? colors.surfaceAlt : "transparent",
-                    borderWidth: isCurrent ? 1 : 0,
-                    borderColor: colors.primary,
-                  }}
-                >
-                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                    <Text style={[styles.muted, { fontSize: 11, fontWeight: "800" }]}>
-                      VERSET {index + 1}
-                    </Text>
-                    <Pressable
-                      onPress={() => void toggleFavorite(index)}
-                      accessibilityLabel="Ajouter aux favoris"
-                    >
-                      <Ionicons
-                        name={favorites.includes(id) ? "bookmark" : "bookmark-outline"}
-                        size={21}
-                        color={favorites.includes(id) ? colors.primary : colors.muted}
-                      />
-                    </Pressable>
-                  </View>
+                <View key={Number(input) + "-" + (index + 1)} style={{ paddingVertical: 15, paddingHorizontal: 12, gap: 13, borderRadius: 16 }}>
+                  <Text style={[styles.muted, { fontSize: 11, fontWeight: "800" }]}>VERSET {index + 1}</Text>
 
                   
                   {arabic ? (
@@ -596,14 +575,14 @@ export default function QuranReaderScreen() {
                       Les champs de ce verset ne sont pas reconnus par le lecteur.
                     </Text>
                   ) : null}
-                </Pressable>
+                </View>
               );
             })
           )}
 
           {!loading && !error && verses.length > 0 ? (
             <Text style={[styles.muted, { fontSize: 11, lineHeight: 17 }]}>
-              Les favoris et la dernière position sont enregistrés sur cet appareil. La mise en évidence mot par mot exige des données audio alignées avec chaque mot ; aucune synchronisation n’est simulée sans ces données.
+              Les sourates favorites et la dernière position sont enregistrées sur cet appareil.
             </Text>
           ) : null}
         </View> : null}
