@@ -168,9 +168,10 @@ function ResourceValue({ value }: { value: unknown }) {
   return null;
 }
 
-function DetailCard({ item, kind, onClose, onPrevious, onNext }: {
+function DetailCard({ item, kind, category, onClose, onPrevious, onNext }: {
   item: RecordValue;
   kind: ResourceKind;
+  category?: string;
   onClose: () => void;
   onPrevious?: () => void;
   onNext?: () => void;
@@ -179,7 +180,12 @@ function DetailCard({ item, kind, onClose, onPrevious, onNext }: {
   const title = getTitle(item, 0);
   const arabic = getArabic(item);
   const meaning = getMeaning(item);
-  const excluded = new Set(["id", "_id", "title", "name", "nameEnglish", "english", "translation", "meaning", "meaningEnglish", "englishMeaning", "text", "textEnglish", "arabic", "arabicText", "textArabic", "text_ar", "text_arabic", "arabic_text", "nameArabic", "arabicName", "ar", "duaArabic", "dua_arabic", "hadithArabic", "dua"]);
+  const categoryLabel = category || getText(item, ["categoryName", "category_name", "category", "categoryTitle"]);
+  const repetitions = getText(item, ["repetitions", "repeat", "repeatCount", "repeat_count", "repeatTimes", "repeat_times", "times", "count", "numberOfRepetitions"]);
+  const source = getText(item, ["reportedBy", "reported_by", "narratedBy", "narrated_by", "narrator", "source", "reference", "citation", "attribution"]);
+  const instruction = getText(item, ["instruction", "instructions", "usage", "howToUse", "how_to_use", "whenToSay", "when_to_say", "occasion"]);
+  const metadataKeys = new Set(["category", "categoryName", "category_name", "categoryTitle", "repetitions", "repeat", "repeatCount", "repeat_count", "repeatTimes", "repeat_times", "times", "count", "numberOfRepetitions", "reportedBy", "reported_by", "narratedBy", "narrated_by", "narrator", "source", "reference", "citation", "attribution", "instruction", "instructions", "usage", "howToUse", "how_to_use", "whenToSay", "when_to_say", "occasion"]);
+  const excluded = new Set(["id", "_id", "title", "name", "nameEnglish", "english", "translation", "meaning", "meaningEnglish", "englishMeaning", "text", "textEnglish", "arabic", "arabicText", "textArabic", "text_ar", "text_arabic", "arabic_text", "nameArabic", "arabicName", "ar", "duaArabic", "dua_arabic", "hadithArabic", "dua", ...(kind === "duas" ? [...metadataKeys] : [])]);
   const details = Object.entries(item).filter(([key, value]) => !excluded.has(key) && value !== undefined && value !== null && value !== "");
   return (
     <View style={{ borderRadius: 24, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, padding: 20, gap: 17 }}>
@@ -194,10 +200,35 @@ function DetailCard({ item, kind, onClose, onPrevious, onNext }: {
           <Ionicons name="close" size={20} color={colors.muted} />
         </Pressable>
       </View>
+      {kind === "duas" && categoryLabel ? (
+        <View style={{ flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 7, borderRadius: 14, paddingHorizontal: 11, paddingVertical: 8, backgroundColor: colors.surfaceAlt }}>
+          <Ionicons name="pricetag-outline" size={15} color={colors.primary} />
+          <Text style={{ color: colors.primary, fontSize: 12, fontWeight: "800" }}>{categoryLabel}</Text>
+        </View>
+      ) : null}
       {arabic ? (
         <View style={{ backgroundColor: colors.surfaceAlt, borderRadius: 20, paddingHorizontal: 17, paddingVertical: 22, gap: 8 }}>
           <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1 }}>TEXTE ARABE</Text>
           <Text style={{ color: colors.text, fontSize: kind === "names" ? 34 : 27, lineHeight: kind === "names" ? 55 : 48, textAlign: "right", writingDirection: "rtl" }}>{arabic}</Text>
+        </View>
+      ) : null}
+      {kind === "duas" && (instruction || repetitions) ? (
+        <View style={{ borderRadius: 18, padding: 15, gap: 9, backgroundColor: colors.surfaceAlt }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <Ionicons name="list-outline" size={18} color={colors.primary} />
+            <Text style={{ color: colors.primary, fontSize: 14, fontWeight: "900" }}>Instructions</Text>
+          </View>
+          {instruction ? <Text style={{ color: colors.text, fontSize: 14, lineHeight: 22 }}>{instruction}</Text> : null}
+          {repetitions ? <Text style={{ color: colors.text, fontSize: 14, lineHeight: 22 }}>Répéter cette invocation {/^\d+$/.test(repetitions) ? repetitions + " fois" : repetitions}.</Text> : null}
+        </View>
+      ) : null}
+      {kind === "duas" && source ? (
+        <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10, borderRadius: 16, borderWidth: 1, borderColor: colors.border, padding: 13 }}>
+          <Ionicons name="book-outline" size={18} color={colors.primary} style={{ marginTop: 1 }} />
+          <View style={{ flex: 1, gap: 3 }}>
+            <Text style={{ color: colors.primary, fontSize: 12, fontWeight: "900" }}>{/(reported|narrat|rapport|روى|رواه)/i.test(source) ? "Rapportée par" : "Source / référence"}</Text>
+            <Text style={{ color: colors.text, fontSize: 13, lineHeight: 20 }}>{source}</Text>
+          </View>
         </View>
       ) : null}
       {meaning ? (
@@ -460,7 +491,7 @@ export default function ResourceScreen({ config }: { config: ResourceConfig }) {
             ) : <Text style={{ color: colors.muted }}>Aucun recueil n’est renvoyé par l’API.</Text>}
           </View>
         ) : selectedItem ? (
-          <DetailCard item={selectedItem} kind={kind} onClose={() => setSelectedItem(null)} onPrevious={selectedIndex > 0 ? () => setSelectedItem(records[selectedIndex - 1]) : undefined} onNext={selectedIndex >= 0 && selectedIndex < records.length - 1 ? () => setSelectedItem(records[selectedIndex + 1]) : undefined} />
+          <DetailCard item={selectedItem} kind={kind} category={kind === "duas" ? selectedCategory?.label : undefined} onClose={() => setSelectedItem(null)} onPrevious={selectedIndex > 0 ? () => setSelectedItem(records[selectedIndex - 1]) : undefined} onNext={selectedIndex >= 0 && selectedIndex < records.length - 1 ? () => setSelectedItem(records[selectedIndex + 1]) : undefined} />
         ) : kind === "generic" && data !== null ? (
           <View style={{ gap: 12 }}>
             <Text style={{ color: colors.text, fontSize: 19, fontWeight: "800" }}>Informations</Text>
