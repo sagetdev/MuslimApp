@@ -40,5 +40,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 export function useAppTheme() {
   const context = useContext(ThemeContext);
   if (!context) throw new Error("useAppTheme must be used inside ThemeProvider");
-  return context;
+
+  // Fallback protects screens during hot reloads or when an older local
+  // bundle still has a partially initialized theme value.
+  const colors = context.colors ?? palettes[context.mode === "light" ? "light" : "dark"];
+  return { ...context, colors };
 }
