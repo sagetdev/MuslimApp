@@ -141,6 +141,7 @@ export default function QuranReaderScreen() {
   const [input, setInput] = useState(initial ?? "1");
   const [surahSearch, setSurahSearch] = useState("");
   const [showJuzList, setShowJuzList] = useState(false);
+  const [showFavoritesMenu, setShowFavoritesMenu] = useState(false);
   const [surah, setSurah] = useState<Surah | null>(null);
   const [verses, setVerses] = useState<Record<string, unknown>[]>([]);
   const [favorites, setFavorites] = useState<number[]>([]);
@@ -286,8 +287,30 @@ export default function QuranReaderScreen() {
               Le Saint Coran
             </Text>
           </View>
+          <Pressable accessibilityRole="button" accessibilityLabel={showFavoritesMenu ? "Fermer les sourates favorites" : "Ouvrir les sourates favorites"} accessibilityState={{ expanded: showFavoritesMenu }} onPress={() => setShowFavoritesMenu((value) => !value)} style={{ padding: 10, borderRadius: 12, backgroundColor: showFavoritesMenu ? colors.primary : colors.surfaceAlt }}>
+            <Ionicons name={showFavoritesMenu ? "close" : "bookmarks-outline"} size={23} color={showFavoritesMenu ? colors.primaryText : colors.primary} />
+          </Pressable>
         </View>
 
+        {showFavoritesMenu ? (
+          <View style={[styles.card, { gap: 8, padding: 12 }]}>
+            <Text style={[styles.text, { fontWeight: "800", fontSize: 15 }]}>Sourates favorites</Text>
+            {favorites.length === 0 ? (
+              <Text style={[styles.muted, { fontSize: 13, lineHeight: 19 }]}>Aucune sourate favorite. Utilise le signet dans la fenêtre de la sourate pour en enregistrer une.</Text>
+            ) : favorites.map((number) => {
+              const item = SURAHS[number - 1];
+              if (!item) return null;
+              return (
+                <Pressable key={number} accessibilityRole="button" accessibilityLabel={"Ouvrir la sourate favorite " + item.name} onPress={() => { setShowFavoritesMenu(false); void loadSurah(number); }} style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 9, paddingHorizontal: 8, borderRadius: 10, backgroundColor: Number(input) === number ? colors.surfaceAlt : "transparent" }}>
+                  <Text style={[styles.muted, { width: 25, fontSize: 12 }]}>{number}</Text>
+                  <View style={{ flex: 1, gap: 2 }}><Text style={[styles.text, { fontWeight: "700" }]}>{item.name}</Text><Text style={[styles.muted, { fontSize: 11 }]}>{item.verses} versets</Text></View>
+                  <Text style={[styles.text, { fontSize: 19 }]}>{item.arabic}</Text>
+                  <Pressable accessibilityRole="button" accessibilityLabel={"Retirer " + item.name + " des favoris"} onPress={() => void toggleFavoriteSurah(number)} style={{ padding: 5 }}><Ionicons name="bookmark" size={17} color={colors.primary} /></Pressable>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
 
         <View style={[styles.card, { gap: 10 }]}>
           <Text style={[styles.text, { fontWeight: "800", fontSize: 16 }]}>Mode de lecture</Text>
@@ -342,15 +365,14 @@ export default function QuranReaderScreen() {
                 Sourate {input} sur 114 · {SURAHS[Number(input) - 1]?.verses ?? "—"} versets
               </Text>
             </View>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Sourate suivante"
-              disabled={loading || Number(input) >= 114}
-              onPress={() => void loadSurah(Number(input) + 1)}
-              style={{ padding: 10, borderRadius: 12, backgroundColor: colors.surfaceAlt, opacity: Number(input) >= 114 ? 0.35 : 1 }}
-            >
-              <Ionicons name="chevron-forward" size={23} color={colors.text} />
-            </Pressable>
+            <View style={{ alignItems: "center", gap: 5 }}>
+              <Pressable accessibilityRole="button" accessibilityLabel="Enregistrer ou retirer cette sourate des favoris" onPress={() => void toggleFavoriteSurah(Number(input))} style={{ padding: 7, borderRadius: 10, backgroundColor: favorites.includes(Number(input)) ? colors.primary : colors.surfaceAlt }}>
+                <Ionicons name={favorites.includes(Number(input)) ? "bookmark" : "bookmark-outline"} size={19} color={favorites.includes(Number(input)) ? colors.primaryText : colors.primary} />
+              </Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel="Sourate suivante" disabled={loading || Number(input) >= 114} onPress={() => void loadSurah(Number(input) + 1)} style={{ padding: 10, borderRadius: 12, backgroundColor: colors.surfaceAlt, opacity: Number(input) >= 114 ? 0.35 : 1 }}>
+                <Ionicons name="chevron-forward" size={23} color={colors.text} />
+              </Pressable>
+            </View>
           </View>
 
           <View style={{ flexDirection: "row", gap: 10, alignItems: "center" }}>
@@ -452,27 +474,6 @@ export default function QuranReaderScreen() {
               </View>
             </View>
           ) : null}
-        </View>
-
-        <View style={[styles.card, { gap: 12 }]}>
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-            <View style={{ flex: 1, gap: 3 }}><Text style={[styles.text, { fontWeight: "800", fontSize: 16 }]}>Sourates favorites</Text><Text style={[styles.muted, { fontSize: 12 }]}>Enregistre une sourate entière pour la retrouver ici.</Text></View>
-            <Pressable accessibilityRole="button" accessibilityLabel={favorites.includes(Number(input)) ? "Retirer cette sourate des favoris" : "Enregistrer cette sourate en favori"} onPress={() => void toggleFavoriteSurah(Number(input))} style={{ padding: 10, borderRadius: 12, backgroundColor: colors.surfaceAlt }}><Ionicons name={favorites.includes(Number(input)) ? "bookmark" : "bookmark-outline"} size={23} color={colors.primary} /></Pressable>
-          </View>
-          {favorites.length === 0 ? <Text style={[styles.muted, { fontSize: 13, lineHeight: 20 }]}>Aucune sourate enregistrée pour le moment. Appuie sur le signet pour ajouter la sourate affichée.</Text> : (
-            <View style={{ gap: 6 }}>{favorites.map((number) => {
-              const item = SURAHS[number - 1];
-              if (!item) return null;
-              return <View key={number} style={{ flexDirection: "row", alignItems: "center", gap: 10, padding: 10, borderRadius: 12, backgroundColor: Number(input) === number ? colors.surfaceAlt : "transparent" }}>
-                <Pressable accessibilityRole="button" accessibilityLabel={"Lire la sourate " + item.name} onPress={() => void loadSurah(number)} style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 10 }}>
-                  <View style={{ width: 34, height: 34, alignItems: "center", justifyContent: "center", borderRadius: 10, backgroundColor: colors.surfaceAlt }}><Text style={[styles.text, { fontWeight: "800" }]}>{item.number}</Text></View>
-                  <View style={{ flex: 1, gap: 2 }}><Text style={[styles.text, { fontWeight: "700" }]}>{item.name}</Text><Text style={[styles.muted, { fontSize: 11 }]}>{item.verses} versets</Text></View>
-                  <Text style={[styles.text, { fontSize: 20 }]}>{item.arabic}</Text>
-                </Pressable>
-                <Pressable accessibilityRole="button" accessibilityLabel={"Retirer " + item.name + " des favoris"} onPress={() => void toggleFavoriteSurah(number)} style={{ padding: 7 }}><Ionicons name="bookmark" size={19} color={colors.primary} /></Pressable>
-              </View>;
-            })}</View>
-          )}
         </View>
 
         {readingMode === "verses" ? <View style={[styles.card, { gap: 14 }]}>
