@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import BackButton from "../components/BackButton";
 import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from "react-native";
@@ -275,6 +276,7 @@ export default function QuranReaderScreen() {
           alignSelf: "center",
         }}
       >
+        <BackButton />
         <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
           <Pressable onPress={() => router.back()} accessibilityLabel="Retour" style={{ padding: 8 }}>
             <Ionicons name="arrow-back" size={23} color={colors.text} />
