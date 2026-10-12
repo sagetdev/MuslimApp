@@ -30,11 +30,12 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
-    "typescript": "~6.0.3"
+    "typescript": "~6.0.3",
+    "tsx": "^4.20.6"
   },
   "scripts": {
     "quran:assets": "tsx --env-file=.env scripts/fetch-quran-assets.mts",
-    "postinstall": "npm run quran:assets || exit 0",
+    "postinstall": "npm run quran:assets",
     "start": "npm run quran:assets && expo start",
     "android": "npm run quran:assets && expo start --android",
     "ios": "npm run quran:assets && expo start --ios",
