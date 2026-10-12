@@ -79,7 +79,9 @@ function labelFor(item: RecordValue, index: number): string {
 }
 
 function slugFor(item: RecordValue, index: number): string {
-  const raw = getText(item, ["slug", "key", "category", "name", "title", "id"]) || String(index + 1);
+  // UmmahAPI category identifiers use stable IDs such as "morning";
+  // display names such as "Morning Adhkar" are not valid category routes.
+  const raw = getText(item, ["slug", "key", "id", "_id", "category", "name", "title"]) || String(index + 1);
   return raw
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
