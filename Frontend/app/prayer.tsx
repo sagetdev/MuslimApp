@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import BackButton from "../components/BackButton";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import { useCallback, useEffect, useState } from "react";
@@ -145,6 +146,7 @@ export default function PrayerScreen() {
           alignSelf: "center",
         }}
       >
+        <BackButton />
         <View style={{ gap: 6 }}>
           <Text style={{ color: colors.primary, fontSize: 10, fontWeight: "900", letterSpacing: 1.8 }}>
             TON QUOTIDIEN
