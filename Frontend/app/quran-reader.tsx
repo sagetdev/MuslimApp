@@ -35,19 +35,18 @@ export default function QuranReaderScreen() {
   const [error, setError] = useState("");
   const [translation, setTranslation] = useState(true);
   const [fontSize, setFontSize] = useState(28);
-  const [playing, setPlaying] = useState(false);
-  const [currentVerse, setCurrentVerse] = useState(0);
+  const [selectedVerse, setSelectedVerse] = useState(0);
 
   useEffect(() => { void AsyncStorage.getItem(FAVORITES_KEY).then(raw => { if (raw) { try { setFavorites(JSON.parse(raw) as number[]); } catch {} } }); }, []);
   const loadSurah = useCallback(async (number: number) => {
     if (!Number.isInteger(number) || number < 1 || number > 114) { setError("Entre un numéro de sourate entre 1 et 114."); return; }
-    setLoading(true); setError(""); setPlaying(false);
+    setLoading(true); setError("");
     try {
       const result = await apiFetch<unknown>(`/quran/surahs/${number}`);
       const parsed = extractSurah(result);
       const ayahs = extractVerses(parsed);
       if (!ayahs.length) throw new Error("Cette sourate ne contient pas de versets lisibles dans la réponse du serveur.");
-      setSurah(parsed); setVerses(ayahs); setCurrentVerse(0); setInput(String(number));
+      setSurah(parsed); setVerses(ayahs); setSelectedVerse(0); setInput(String(number));
       await AsyncStorage.setItem(LAST_READ_KEY, JSON.stringify({ surah: number, verse: 1, updatedAt: new Date().toISOString() }));
     } catch (e) { setError(e instanceof Error ? e.message : "Impossible de charger la sourate."); }
     finally { setLoading(false); }
@@ -85,16 +84,16 @@ export default function QuranReaderScreen() {
             <Pressable accessibilityLabel="Afficher ou masquer la traduction" onPress={() => setTranslation(v => !v)} style={{ padding: 6 }}><Ionicons name="language-outline" size={23} color={colors.primary}/></Pressable>
           </View>
         </View>
-        <Pressable onPress={() => setPlaying(v => !v)} accessibilityRole="button" style={{ flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: colors.surfaceAlt, borderRadius: 16, padding: 13 }}>
-          <Ionicons name={playing ? "pause-circle" : "play-circle"} size={36} color={colors.primary}/>
-          <View style={{ flex: 1, gap: 3 }}><Text style={[styles.text, { fontWeight: "800" }]}>{playing ? "Lecture audio demandée" : "Écouter la récitation"}</Text><Text style={[styles.muted, { fontSize: 11, lineHeight: 16 }]}>La synchronisation mot par mot s’active lorsque la source audio fournit les horodatages de récitation.</Text></View>
+        <Pressable onPress={() => {}} disabled accessibilityRole="button" style={{ flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: colors.surfaceAlt, borderRadius: 16, padding: 13, opacity: 0.8 }}>
+          <Ionicons name="headset-outline" size={36} color={colors.muted}/>
+          <View style={{ flex: 1, gap: 3 }}><Text style={[styles.text, { fontWeight: "800" }]}>Récitation audio — à connecter</Text><Text style={[styles.muted, { fontSize: 11, lineHeight: 16 }]}>La lecture et le surlignage mot par mot seront activés avec une source audio horodatée. Aucun état de lecture fictif n’est affiché.</Text></View>
         </Pressable>
         {loading ? <ActivityIndicator color={colors.primary} size="large"/> : error ? <View style={{ gap: 10 }}><Text style={{ color: "#E57373", lineHeight: 21 }}>{error}</Text><Pressable onPress={() => void loadSurah(Number(input))} style={styles.action}><Text style={{ color: colors.primaryText, fontWeight: "800" }}>Réessayer</Text></Pressable></View> : verses.map((verse, index) => {
           const id = Number(surah?.number ?? surah?.id ?? Number(input)) * 1000 + index + 1;
           const arabic = firstText(verse, ["text","arabic","text_uthmani","arabicText","textArabic"]);
           const translated = firstText(verse, ["translation","translationText","text_translation","english","meaning"]);
-          const isCurrent = playing && currentVerse === index;
-          return <Pressable key={id} onPress={() => { setCurrentVerse(index); void AsyncStorage.setItem(LAST_READ_KEY, JSON.stringify({ surah: Number(input), verse: index + 1, updatedAt: new Date().toISOString() })); }} style={{ paddingVertical: 15, paddingHorizontal: 12, gap: 13, borderRadius: 16, backgroundColor: isCurrent ? colors.surfaceAlt : "transparent", borderWidth: isCurrent ? 1 : 0, borderColor: colors.primary }}>
+          const isCurrent = selectedVerse === index;
+          return <Pressable key={id} onPress={() => { setSelectedVerse(index); void AsyncStorage.setItem(LAST_READ_KEY, JSON.stringify({ surah: Number(input), verse: index + 1, updatedAt: new Date().toISOString() })); }} style={{ paddingVertical: 15, paddingHorizontal: 12, gap: 13, borderRadius: 16, backgroundColor: isCurrent ? colors.surfaceAlt : "transparent", borderWidth: isCurrent ? 1 : 0, borderColor: colors.primary }}>
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}><Text style={[styles.muted, { fontSize: 11, fontWeight: "800" }]}>VERS ET {index + 1}</Text><Pressable onPress={() => void toggleFavorite(index)} accessibilityLabel="Ajouter aux favoris"><Ionicons name={favorites.includes(id) ? "bookmark" : "bookmark-outline"} size={21} color={favorites.includes(id) ? colors.primary : colors.muted}/></Pressable></View>
             {arabic ? <Text style={{ color: colors.text, fontSize, lineHeight: fontSize * 1.9, textAlign: "right" }} writingDirection="rtl">{arabic}</Text> : null}
             {translation && translated ? <Text style={[styles.muted, { fontSize: 14, lineHeight: 23 }]}>{translated}</Text> : null}
