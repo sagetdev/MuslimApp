@@ -5,6 +5,7 @@ const config: ResourceConfig = {
   subtitle: "Consulte la date du calendrier hégirien.",
   icon: "calendar-outline",
   endpoint: "/today-hijri",
+  includeTimezone: true,
 };
 
 export default function HijriScreen() {
