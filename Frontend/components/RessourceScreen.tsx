@@ -415,6 +415,13 @@ export default function ResourceScreen({ config }: { config: ResourceConfig }) {
           </View>
         ) : selectedItem ? (
           <DetailCard item={selectedItem} kind={kind} onClose={() => setSelectedItem(null)} onPrevious={selectedIndex > 0 ? () => setSelectedItem(records[selectedIndex - 1]) : undefined} onNext={selectedIndex >= 0 && selectedIndex < records.length - 1 ? () => setSelectedItem(records[selectedIndex + 1]) : undefined} />
+        ) : kind === "generic" && data !== null ? (
+          <View style={{ gap: 12 }}>
+            <Text style={{ color: colors.text, fontSize: 19, fontWeight: "800" }}>Informations</Text>
+            <View style={{ backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: 20, padding: 17 }}>
+              <ResourceValue value={data} />
+            </View>
+          </View>
         ) : records.length ? (
           <View style={{ gap: 13 }}>
             <View style={{ flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
