@@ -311,9 +311,20 @@ export default function ExploreScreen() {
             </Pressable>
           ) : null}
 
+        {selected === "prayer" || selected === "qibla" || selected === "duas" ? (
+          <Pressable
+            onPress={() => router.push(selected === "prayer" ? "/prayer" : selected === "qibla" ? "/qibla" : "/adhkar")}
+            style={[styles.searchButton, { backgroundColor: colors.primary }]}
+          >
+            <Text style={{ color: colors.primaryText, fontWeight: "700" }}>
+              Ouvrir l’écran {selected === "prayer" ? "Horaires de prière" : selected === "qibla" ? "Qibla" : "Adhkar"}
+            </Text>
+          </Pressable>
+        ) : null}
+
         {selected === "quran" ? (
             <Pressable
-              onPress={() => router.push("/quran/1")}
+              onPress={() => router.push("/quran-reader")}
               style={[
                 styles.searchButton,
                 {
