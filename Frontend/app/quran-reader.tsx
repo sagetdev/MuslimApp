@@ -23,7 +23,74 @@ type Surah = {
   ayahs?: unknown[];
 };
 
-const FAVORITES_KEY = "muslimapp:quran:favorites:v1";
+
+type SurahInfo = { number: number; name: string; arabic: string; verses: number };
+
+const SURAHS: SurahInfo[] = [
+  ["Al-Fatiha","الفاتحة",7],["Al-Baqara","البقرة",286],["Ali 'Imran","آل عمران",200],
+  ["An-Nisa","النساء",176],["Al-Ma'idah","المائدة",120],["Al-An'am","الأنعام",165],
+  ["Al-A'raf","الأعراف",206],["Al-Anfal","الأنفال",75],["At-Tawbah","التوبة",129],
+  ["Yunus","يونس",109],["Hud","هود",123],["Yusuf","يوسف",111],["Ar-Ra'd","الرعد",43],
+  ["Ibrahim","إبراهيم",52],["Al-Hijr","الحجر",99],["An-Nahl","النحل",128],
+  ["Al-Isra","الإسراء",111],["Al-Kahf","الكهف",110],["Maryam","مريم",98],
+  ["Ta-Ha","طه",135],["Al-Anbiya","الأنبياء",112],["Al-Hajj","الحج",78],
+  ["Al-Mu'minun","المؤمنون",118],["An-Nur","النور",64],["Al-Furqan","الفرقان",77],
+  ["Ash-Shu'ara","الشعراء",227],["An-Naml","النمل",93],["Al-Qasas","القصص",88],
+  ["Al-Ankabut","العنكبوت",69],["Ar-Rum","الروم",60],["Luqman","لقمان",34],
+  ["As-Sajdah","السجدة",30],["Al-Ahzab","الأحزاب",73],["Saba","سبأ",54],
+  ["Fatir","فاطر",45],["Ya-Sin","يس",83],["As-Saffat","الصافات",182],
+  ["Sad","ص",88],["Az-Zumar","الزمر",75],["Ghafir","غافر",85],
+  ["Fussilat","فصلت",54],["Ash-Shura","الشورى",53],["Az-Zukhruf","الزخرف",89],
+  ["Ad-Dukhan","الدخان",59],["Al-Jathiyah","الجاثية",37],["Al-Ahqaf","الأحقاف",35],
+  ["Muhammad","محمد",38],["Al-Fath","الفتح",29],["Al-Hujurat","الحجرات",18],
+  ["Qaf","ق",45],["Adh-Dhariyat","الذاريات",60],["At-Tur","الطور",49],
+  ["An-Najm","النجم",62],["Al-Qamar","القمر",55],["Ar-Rahman","الرحمن",78],
+  ["Al-Waqi'ah","الواقعة",96],["Al-Hadid","الحديد",29],["Al-Mujadila","المجادلة",22],
+  ["Al-Hashr","الحشر",24],["Al-Mumtahanah","الممتحنة",13],["As-Saff","الصف",14],
+  ["Al-Jumu'ah","الجمعة",11],["Al-Munafiqun","المنافقون",11],["At-Taghabun","التغابن",18],
+  ["At-Talaq","الطلاق",12],["At-Tahrim","التحريم",12],["Al-Mulk","الملك",30],
+  ["Al-Qalam","القلم",52],["Al-Haqqah","الحاقة",52],["Al-Ma'arij","المعارج",44],
+  ["Nuh","نوح",28],["Al-Jinn","الجن",28],["Al-Muzzammil","المزمل",20],
+  ["Al-Muddaththir","المدثر",56],["Al-Qiyamah","القيامة",40],["Al-Insan","الإنسان",31],
+  ["Al-Mursalat","المرسلات",50],["An-Naba","النبأ",40],["An-Nazi'at","النازعات",46],
+  ["Abasa","عبس",42],["At-Takwir","التكوير",29],["Al-Infitar","الانفطار",19],
+  ["Al-Mutaffifin","المطففين",36],["Al-Inshiqaq","الانشقاق",25],["Al-Buruj","البروج",22],
+  ["At-Tariq","الطارق",17],["Al-A'la","الأعلى",19],["Al-Ghashiyah","الغاشية",26],
+  ["Al-Fajr","الفجر",30],["Al-Balad","البلد",20],["Ash-Shams","الشمس",15],
+  ["Al-Layl","الليل",21],["Ad-Duha","الضحى",11],["Ash-Sharh","الشرح",8],
+  ["At-Tin","التين",8],["Al-Alaq","العلق",19],["Al-Qadr","القدر",5],
+  ["Al-Bayyinah","البينة",8],["Az-Zalzalah","الزلزلة",8],["Al-Adiyat","العاديات",11],
+  ["Al-Qari'ah","القارعة",11],["At-Takathur","التكاثر",8],["Al-Asr","العصر",3],
+  ["Al-Humazah","الهمزة",9],["Al-Fil","الفيل",5],["Quraysh","قريش",4],
+  ["Al-Ma'un","الماعون",7],["Al-Kawthar","الكوثر",3],["Al-Kafirun","الكافرون",6],
+  ["An-Nasr","النصر",3],["Al-Masad","المسد",5],["Al-Ikhlas","الإخلاص",4],
+  ["Al-Falaq","الفلق",5],["An-Nas","الناس",6],
+].map(([name, arabic, verses], index) => ({
+  number: index + 1,
+  name: name as string,
+  arabic: arabic as string,
+  verses: verses as number,
+}));
+
+// Début de chaque Juz selon la division courante du Mushaf.
+const JUZ_STARTS: Array<{ juz: number; surah: number; verse: number }> = [
+  { juz: 1, surah: 1, verse: 1 }, { juz: 2, surah: 2, verse: 142 },
+  { juz: 3, surah: 2, verse: 253 }, { juz: 4, surah: 3, verse: 93 },
+  { juz: 5, surah: 4, verse: 24 }, { juz: 6, surah: 4, verse: 148 },
+  { juz: 7, surah: 5, verse: 82 }, { juz: 8, surah: 6, verse: 111 },
+  { juz: 9, surah: 7, verse: 88 }, { juz: 10, surah: 8, verse: 41 },
+  { juz: 11, surah: 9, verse: 93 }, { juz: 12, surah: 11, verse: 6 },
+  { juz: 13, surah: 12, verse: 53 }, { juz: 14, surah: 15, verse: 1 },
+  { juz: 15, surah: 17, verse: 1 }, { juz: 16, surah: 18, verse: 75 },
+  { juz: 17, surah: 21, verse: 1 }, { juz: 18, surah: 23, verse: 1 },
+  { juz: 19, surah: 25, verse: 21 }, { juz: 20, surah: 27, verse: 56 },
+  { juz: 21, surah: 29, verse: 46 }, { juz: 22, surah: 33, verse: 31 },
+  { juz: 23, surah: 36, verse: 28 }, { juz: 24, surah: 39, verse: 32 },
+  { juz: 25, surah: 41, verse: 47 }, { juz: 26, surah: 46, verse: 1 },
+  { juz: 27, surah: 51, verse: 31 }, { juz: 28, surah: 58, verse: 1 },
+  { juz: 29, surah: 67, verse: 1 }, { juz: 30, surah: 78, verse: 1 },
+];
+\nconst FAVORITES_KEY = "muslimapp:quran:favorites:v1";
 const LAST_READ_KEY = "muslimapp:quran:last-read:v1";
 
 function objectValue(value: unknown): Record<string, unknown> {
@@ -59,7 +126,7 @@ export default function QuranReaderScreen() {
   const params = useLocalSearchParams<{ surah?: string | string[] }>();
   const router = useRouter();
   const initial = Array.isArray(params.surah) ? params.surah[0] : params.surah;
-  const [input, setInput] = useState(initial ?? "1");
+  const [input, setInput] = useState(initial ?? "1");\n  const [surahSearch, setSurahSearch] = useState("");\n  const [showSurahList, setShowSurahList] = useState(false);\n  const [showJuzList, setShowJuzList] = useState(false);
   const [surah, setSurah] = useState<Surah | null>(null);
   const [verses, setVerses] = useState<Record<string, unknown>[]>([]);
   const [favorites, setFavorites] = useState<number[]>([]);
@@ -80,7 +147,7 @@ export default function QuranReaderScreen() {
     });
   }, []);
 
-  const loadSurah = useCallback(async (number: number) => {
+  const loadSurah = useCallback(async (number: number, verseNumber = 1) => {
     if (!Number.isInteger(number) || number < 1 || number > 114) {
       setError("Entre un numéro de sourate entre 1 et 114.");
       return;
@@ -238,37 +305,136 @@ export default function QuranReaderScreen() {
           </Text>
         </View>
 
-        <View style={[styles.card, { flexDirection: "row", alignItems: "center" }]}>
-          <View style={{ flex: 1, gap: 5 }}>
-            <Text style={[styles.text, { fontSize: 18, fontWeight: "800" }]}>
-              {surah
-                ? firstText(surah as Record<string, unknown>, ["englishName", "english_name", "name_english", "name"]) ||
-                  `Sourate ${input}`
-                : "Choisir une sourate"}
-            </Text>
-            <Text style={[styles.muted, { fontSize: 12 }]}>
-              Reprise de lecture enregistrée automatiquement
-            </Text>
+        <View style={[styles.card, { gap: 14 }]}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Sourate précédente"
+              disabled={loading || Number(input) <= 1}
+              onPress={() => void loadSurah(Number(input) - 1)}
+              style={{ padding: 10, borderRadius: 12, backgroundColor: colors.surfaceAlt, opacity: Number(input) <= 1 ? 0.35 : 1 }}
+            >
+              <Ionicons name="chevron-back" size={23} color={colors.text} />
+            </Pressable>
+            <View style={{ flex: 1, gap: 4, alignItems: "center" }}>
+              <Text style={[styles.text, { fontSize: 18, fontWeight: "800", textAlign: "center" }]}>
+                {surah ? SURAHS[Number(input) - 1]?.name ?? `Sourate ${input}` : "Choisir une sourate"}
+              </Text>
+              <Text style={[styles.text, { fontSize: 22, textAlign: "center" }]}>
+                {SURAHS[Number(input) - 1]?.arabic ?? ""}
+              </Text>
+              <Text style={[styles.muted, { fontSize: 12, textAlign: "center" }]}>
+                Sourate {input} sur 114 · {SURAHS[Number(input) - 1]?.verses ?? "—"} versets
+              </Text>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Sourate suivante"
+              disabled={loading || Number(input) >= 114}
+              onPress={() => void loadSurah(Number(input) + 1)}
+              style={{ padding: 10, borderRadius: 12, backgroundColor: colors.surfaceAlt, opacity: Number(input) >= 114 ? 0.35 : 1 }}
+            >
+              <Ionicons name="chevron-forward" size={23} color={colors.text} />
+            </Pressable>
           </View>
-          <TextInput
-            accessibilityLabel="Numéro de sourate"
-            value={input}
-            onChangeText={setInput}
-            keyboardType="number-pad"
-            maxLength={3}
-            style={{
-              color: colors.text,
-              backgroundColor: colors.surfaceAlt,
-              borderRadius: 12,
-              width: 58,
-              textAlign: "center",
-              padding: 10,
-              fontWeight: "800",
-            }}
-          />
-          <Pressable onPress={() => void loadSurah(Number(input))} style={styles.action}>
-            <Text style={{ color: colors.primaryText, fontWeight: "800" }}>Ouvrir</Text>
-          </Pressable>
+
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <TextInput
+              accessibilityLabel="Rechercher une sourate par nom"
+              accessibilityHint="Saisissez un nom comme Yasin ou Al-Baqara"
+              value={surahSearch}
+              onChangeText={(value) => {
+                setSurahSearch(value);
+                setShowSurahList(true);
+                setShowJuzList(false);
+              }}
+              placeholder="Rechercher par nom…"
+              placeholderTextColor={colors.muted}
+              autoCapitalize="none"
+              style={{ flex: 1, color: colors.text, backgroundColor: colors.surfaceAlt, borderRadius: 12, paddingHorizontal: 13, paddingVertical: 11 }}
+            />
+            <TextInput
+              accessibilityLabel="Numéro de sourate"
+              value={input}
+              onChangeText={setInput}
+              keyboardType="number-pad"
+              maxLength={3}
+              style={{ color: colors.text, backgroundColor: colors.surfaceAlt, borderRadius: 12, width: 58, textAlign: "center", padding: 10, fontWeight: "800" }}
+            />
+            <Pressable onPress={() => void loadSurah(Number(input))} style={styles.action}>
+              <Text style={{ color: colors.primaryText, fontWeight: "800" }}>Ouvrir</Text>
+            </Pressable>
+          </View>
+
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ expanded: showSurahList }}
+              onPress={() => { setShowSurahList((v) => !v); setShowJuzList(false); }}
+              style={[styles.action, { flex: 1, backgroundColor: showSurahList ? colors.primary : colors.surfaceAlt }]}
+            >
+              <Text style={{ color: showSurahList ? colors.primaryText : colors.text, fontWeight: "800" }}>Liste des sourates</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ expanded: showJuzList }}
+              onPress={() => { setShowJuzList((v) => !v); setShowSurahList(false); }}
+              style={[styles.action, { flex: 1, backgroundColor: showJuzList ? colors.primary : colors.surfaceAlt }]}
+            >
+              <Text style={{ color: showJuzList ? colors.primaryText : colors.text, fontWeight: "800" }}>Explorer les Juz</Text>
+            </Pressable>
+          </View>
+
+          {showSurahList ? (
+            <View style={{ gap: 8 }}>
+              <Text style={[styles.muted, { fontSize: 12 }]}>Sélectionnez une sourate dans la liste des 114 sourates.</Text>
+              <ScrollView nestedScrollEnabled style={{ maxHeight: 300 }} keyboardShouldPersistTaps="handled">
+                {SURAHS.filter((item) => {
+                  const query = surahSearch.trim().toLocaleLowerCase();
+                  return !query || item.name.toLocaleLowerCase().includes(query) || item.arabic.includes(surahSearch.trim()) || String(item.number) === query;
+                }).map((item) => (
+                  <Pressable
+                    key={item.number}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Sourate ${item.number}, ${item.name}, ${item.verses} versets`}
+                    onPress={() => { setSurahSearch(""); void loadSurah(item.number); }}
+                    style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10, paddingHorizontal: 8, borderRadius: 10, backgroundColor: Number(input) === item.number ? colors.surfaceAlt : "transparent" }}
+                  >
+                    <View style={{ width: 34, height: 34, alignItems: "center", justifyContent: "center", borderRadius: 10, backgroundColor: colors.surfaceAlt }}>
+                      <Text style={[styles.text, { fontWeight: "800" }]}>{item.number}</Text>
+                    </View>
+                    <View style={{ flex: 1, gap: 2 }}>
+                      <Text style={[styles.text, { fontWeight: "700" }]}>{item.name}</Text>
+                      <Text style={[styles.muted, { fontSize: 11 }]}>{item.verses} versets</Text>
+                    </View>
+                    <Text style={[styles.text, { fontSize: 20 }]}>{item.arabic}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          ) : null}
+
+          {showJuzList ? (
+            <View style={{ gap: 8 }}>
+              <Text style={[styles.muted, { fontSize: 12, lineHeight: 18 }]}>
+                Choisissez l’un des 30 Juz. La lecture s’ouvrira à son verset de départ.
+              </Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                {JUZ_STARTS.map((item) => (
+                  <Pressable
+                    key={item.juz}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Ouvrir le Juz ${item.juz}`}
+                    onPress={() => void loadSurah(item.surah, item.verse)}
+                    style={{ minWidth: 62, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 12, backgroundColor: colors.surfaceAlt, alignItems: "center" }}
+                  >
+                    <Text style={[styles.text, { fontWeight: "800" }]}>Juz {item.juz}</Text>
+                    <Text style={[styles.muted, { fontSize: 10 }]}>{item.surah}:{item.verse}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          ) : null}
         </View>
 
 
