@@ -360,6 +360,9 @@ export default function QuranReaderScreen() {
               <Text style={[styles.text, { fontSize: 18, fontWeight: "800", textAlign: "center" }]}>
                 {surah ? SURAHS[Number(input) - 1]?.name ?? `Sourate ${input}` : "Choisir une sourate"}
               </Text>
+              <Pressable accessibilityRole="button" accessibilityLabel="Enregistrer ou retirer cette sourate des favoris" onPress={() => void toggleFavoriteSurah(Number(input))} style={{ alignSelf: "flex-end", marginRight: 18, marginTop: -2, marginBottom: -3, padding: 6, borderRadius: 10, backgroundColor: favorites.includes(Number(input)) ? colors.primary : colors.surfaceAlt }}>
+                <Ionicons name={favorites.includes(Number(input)) ? "bookmark" : "bookmark-outline"} size={19} color={favorites.includes(Number(input)) ? colors.primaryText : colors.primary} />
+              </Pressable>
               <Text style={[styles.text, { fontSize: 22, textAlign: "center" }]}>
                 {SURAHS[Number(input) - 1]?.arabic ?? ""}
               </Text>
@@ -367,14 +370,9 @@ export default function QuranReaderScreen() {
                 Sourate {input} sur 114 · {SURAHS[Number(input) - 1]?.verses ?? "—"} versets
               </Text>
             </View>
-            <View style={{ alignItems: "center", gap: 5 }}>
-              <Pressable accessibilityRole="button" accessibilityLabel="Enregistrer ou retirer cette sourate des favoris" onPress={() => void toggleFavoriteSurah(Number(input))} style={{ padding: 7, borderRadius: 10, backgroundColor: favorites.includes(Number(input)) ? colors.primary : colors.surfaceAlt }}>
-                <Ionicons name={favorites.includes(Number(input)) ? "bookmark" : "bookmark-outline"} size={19} color={favorites.includes(Number(input)) ? colors.primaryText : colors.primary} />
-              </Pressable>
-              <Pressable accessibilityRole="button" accessibilityLabel="Sourate suivante" disabled={loading || Number(input) >= 114} onPress={() => void loadSurah(Number(input) + 1)} style={{ padding: 10, borderRadius: 12, backgroundColor: colors.surfaceAlt, opacity: Number(input) >= 114 ? 0.35 : 1 }}>
-                <Ionicons name="chevron-forward" size={23} color={colors.text} />
-              </Pressable>
-            </View>
+            <Pressable accessibilityRole="button" accessibilityLabel="Sourate suivante" disabled={loading || Number(input) >= 114} onPress={() => void loadSurah(Number(input) + 1)} style={{ padding: 10, borderRadius: 12, backgroundColor: colors.surfaceAlt, opacity: Number(input) >= 114 ? 0.35 : 1 }}>
+              <Ionicons name="chevron-forward" size={23} color={colors.text} />
+            </Pressable>
           </View>
 
           <View style={{ flexDirection: "row", gap: 10, alignItems: "center" }}>
