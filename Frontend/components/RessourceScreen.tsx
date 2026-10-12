@@ -71,7 +71,7 @@ function getMeaning(item: RecordValue): string {
 }
 
 function humanize(key: string): string {
-  return key.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/[_-]/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+  return key.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/[_-]/g, " ").replace(/\\b\\w/g, (letter) => letter.toUpperCase());
 }
 
 function labelFor(item: RecordValue, index: number): string {
@@ -80,14 +80,50 @@ function labelFor(item: RecordValue, index: number): string {
 
 function slugFor(item: RecordValue, index: number): string {
   const raw = getText(item, ["slug", "key", "category", "name", "title", "id"]) || String(index + 1);
-  return raw.toLowerCase().trim().replace(/\s+/g, "-");
+  return raw.toLowerCase().trim().replace(/\\s+/g, "-");
 }
 
-const categoryIcons: (keyof typeof Ionicons.glyphMap)[] = [
-  "sunny-outline", "moon-outline", "heart-outline", "shield-checkmark-outline",
-  "home-outline", "car-outline", "bed-outline", "restaurant-outline",
-  "water-outline", "leaf-outline", "hand-left-outline", "book-outline",
+const fallbackCategoryIcons: (keyof typeof Ionicons.glyphMap)[] = [
+  "sparkles-outline", "compass-outline", "chatbubble-ellipses-outline", "leaf-outline",
+  "star-outline", "hand-left-outline", "water-outline", "flower-outline",
+  "cloud-outline", "footsteps-outline", "gift-outline", "book-outline",
 ];
+
+const categoryIconRules: Array<{ terms: string[]; icon: keyof typeof Ionicons.glyphMap }> = [
+  { terms: ["matin", "morning", "fajr", "aube", "sunrise"], icon: "sunny-outline" },
+  { terms: ["soir", "evening", "nuit", "night", "coucher", "sommeil", "sleep", "dormir"], icon: "moon-outline" },
+  { terms: ["priere", "prayer", "salah", "salat", "adhan", "adhan", "mosquee", "mosque"], icon: "time-outline" },
+  { terms: ["protection", "protect", "refuge", "evil", "mal"], icon: "shield-checkmark-outline" },
+  { terms: ["pardon", "forgiveness", "repent", "istighfar", "peche", "sin"], icon: "heart-outline" },
+  { terms: ["maison", "home", "foyer", "house"], icon: "home-outline" },
+  { terms: ["voyage", "travel", "route", "transport", "voiture", "car", "deplacement"], icon: "car-outline" },
+  { terms: ["repas", "manger", "food", "eat", "nourriture", "boire", "drink"], icon: "restaurant-outline" },
+  { terms: ["ablution", "wudu", "eau", "water", "purification"], icon: "water-outline" },
+  { terms: ["sante", "maladie", "illness", "health", "guerison", "healing", "medecin"], icon: "medkit-outline" },
+  { terms: ["parents", "famille", "family", "enfant", "children", "proches"], icon: "people-outline" },
+  { terms: ["gratitude", "remerciement", "merci", "thank", "louange", "praise"], icon: "gift-outline" },
+  { terms: ["stress", "angoisse", "anxiete", "anxiety", "tristesse", "sadness", "difficulte"], icon: "cloud-outline" },
+  { terms: ["invocation", "dua", "dhikr", "rappel", "remembrance"], icon: "chatbubble-ellipses-outline" },
+  { terms: ["jeune", "ramadan", "fasting", "iftar", "suhoor"], icon: "restaurant-outline" },
+  { terms: ["hajj", "omra", "umrah", "pelerinage", "pilgrimage", "kaaba"], icon: "compass-outline" },
+  { terms: ["lecture", "coran", "quran", "livre", "book"], icon: "book-outline" },
+  { terms: ["reussite", "examen", "etude", "travail", "success", "study"], icon: "school-outline" },
+];
+
+function normalizeCategoryText(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\\u0300-\\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function categoryIconFor(label: string, slug: string, index: number): keyof typeof Ionicons.glyphMap {
+  const normalized = normalizeCategoryText(`${label} ${slug.replace(/-/g, " ")}`);
+  const match = categoryIconRules.find((rule) => rule.terms.some((term) => normalized.includes(normalizeCategoryText(term))));
+  return match?.icon ?? fallbackCategoryIcons[index % fallbackCategoryIcons.length];
+}
 
 function ResourceValue({ value }: { value: unknown }) {
   const { colors } = useAppTheme();
@@ -282,7 +318,7 @@ export default function ResourceScreen({ config }: { config: ResourceConfig }) {
 
   const chooseCollection = (item: RecordValue, index: number) => {
     const label = getTitle(item, index);
-    const slug = getText(item, ["slug", "key", "collection", "name", "title", "id"]).toLowerCase().replace(/\s+/g, "");
+    const slug = getText(item, ["slug", "key", "collection", "name", "title", "id"]).toLowerCase().replace(/\\s+/g, "");
     if (!slug) return;
     setSelectedCollection({ label, slug });
     setSelectedItem(null);
@@ -374,10 +410,11 @@ export default function ResourceScreen({ config }: { config: ResourceConfig }) {
                   const label = labelFor(item, index);
                   const slug = slugFor(item, index);
                   const description = getText(item, ["description", "subtitle", "count", "total"]);
+                  const icon = categoryIconFor(label, slug, index);
                   return (
                     <Pressable key={slug + index} accessibilityRole="button" onPress={() => void loadCategory({ label, slug })} style={({ pressed }) => ({ width: "48%", flexGrow: 1, minHeight: 135, padding: 15, borderRadius: 20, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, gap: 12, opacity: pressed ? 0.78 : 1 })}>
                       <View style={{ width: 43, height: 43, borderRadius: 15, alignItems: "center", justifyContent: "center", backgroundColor: colors.surfaceAlt }}>
-                        <Ionicons name={categoryIcons[index % categoryIcons.length]} size={22} color={colors.primary} />
+                        <Ionicons name={icon} size={22} color={colors.primary} />
                       </View>
                       <View style={{ gap: 4 }}>
                         <Text style={{ color: colors.text, fontWeight: "800", fontSize: 14 }}>{label}</Text>
