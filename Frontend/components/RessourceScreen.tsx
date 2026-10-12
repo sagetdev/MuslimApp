@@ -79,7 +79,7 @@ function labelFor(item: RecordValue, index: number): string {
 }
 
 function slugFor(item: RecordValue, index: number): string {
-  const raw = getText(item, ["slug", "key", "id", "category", "name", "title"]) || String(index + 1);
+  const raw = getText(item, ["slug", "key", "category", "name", "title", "id"]) || String(index + 1);
   return raw.toLowerCase().trim().replace(/\s+/g, "-");
 }
 
@@ -282,7 +282,7 @@ export default function ResourceScreen({ config }: { config: ResourceConfig }) {
 
   const chooseCollection = (item: RecordValue, index: number) => {
     const label = getTitle(item, index);
-    const slug = getText(item, ["slug", "key", "id", "collection", "name", "title"]).toLowerCase().replace(/\s+/g, "");
+    const slug = getText(item, ["slug", "key", "collection", "name", "title", "id"]).toLowerCase().replace(/\s+/g, "");
     if (!slug) return;
     setSelectedCollection({ label, slug });
     setSelectedItem(null);
@@ -397,7 +397,7 @@ export default function ResourceScreen({ config }: { config: ResourceConfig }) {
               <View style={{ gap: 10 }}>
                 {collections.map((item, index) => {
                   const label = getTitle(item, index);
-                  const slug = getText(item, ["slug", "key", "id", "collection", "name", "title"]);
+                  const slug = getText(item, ["slug", "key", "collection", "name", "title", "id"]);
                   const description = getText(item, ["description", "author", "compiler", "hadithCount", "count"]);
                   return (
                     <Pressable key={slug || index} accessibilityRole="button" onPress={() => chooseCollection(item, index)} style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: 13, padding: 16, borderRadius: 19, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, opacity: pressed ? 0.78 : 1 })}>
