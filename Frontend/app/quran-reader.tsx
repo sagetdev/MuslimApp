@@ -301,12 +301,14 @@ export default function QuranReaderScreen() {
               const item = SURAHS[number - 1];
               if (!item) return null;
               return (
-                <Pressable key={number} accessibilityRole="button" accessibilityLabel={"Ouvrir la sourate favorite " + item.name} onPress={() => { setShowFavoritesMenu(false); void loadSurah(number); }} style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 9, paddingHorizontal: 8, borderRadius: 10, backgroundColor: Number(input) === number ? colors.surfaceAlt : "transparent" }}>
-                  <Text style={[styles.muted, { width: 25, fontSize: 12 }]}>{number}</Text>
-                  <View style={{ flex: 1, gap: 2 }}><Text style={[styles.text, { fontWeight: "700" }]}>{item.name}</Text><Text style={[styles.muted, { fontSize: 11 }]}>{item.verses} versets</Text></View>
-                  <Text style={[styles.text, { fontSize: 19 }]}>{item.arabic}</Text>
+                <View key={number} style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 5, paddingHorizontal: 8, borderRadius: 10, backgroundColor: Number(input) === number ? colors.surfaceAlt : "transparent" }}>
+                  <Pressable accessibilityRole="button" accessibilityLabel={"Ouvrir la sourate favorite " + item.name} onPress={() => { setShowFavoritesMenu(false); void loadSurah(number); }} style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 4 }}>
+                    <Text style={[styles.muted, { width: 25, fontSize: 12 }]}>{number}</Text>
+                    <View style={{ flex: 1, gap: 2 }}><Text style={[styles.text, { fontWeight: "700" }]}>{item.name}</Text><Text style={[styles.muted, { fontSize: 11 }]}>{item.verses} versets</Text></View>
+                    <Text style={[styles.text, { fontSize: 19 }]}>{item.arabic}</Text>
+                  </Pressable>
                   <Pressable accessibilityRole="button" accessibilityLabel={"Retirer " + item.name + " des favoris"} onPress={() => void toggleFavoriteSurah(number)} style={{ padding: 5 }}><Ionicons name="bookmark" size={17} color={colors.primary} /></Pressable>
-                </Pressable>
+                </View>
               );
             })}
           </View>
