@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import BackButton from "../components/BackButton";
 import * as Location from "expo-location";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
@@ -98,6 +99,7 @@ export default function QiblaScreen() {
           alignSelf: "center",
         }}
       >
+        <BackButton />
         <View style={{ width: "100%", gap: 7 }}>
           <Text style={{ color: colors.primary, fontSize: 10, fontWeight: "900", letterSpacing: 1.8 }}>
             ORIENTATION
