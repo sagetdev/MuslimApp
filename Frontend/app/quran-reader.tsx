@@ -115,7 +115,15 @@ export default function QuranReaderScreen() {
         JSON.stringify({ surah: number, verse: 1, updatedAt: new Date().toISOString() })
       );
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Impossible de charger la sourate.");
+      // Garde une trace exploitable même si l'erreur est interceptée par l'écran.
+      console.error("[QuranReader] Échec du chargement de la sourate :", e);
+      const diagnostic =
+        e instanceof Error
+          ? (e.stack || e.message)
+          : typeof e === "string"
+          ? e
+          : JSON.stringify(e);
+      setError(diagnostic || "Impossible de charger la sourate.");
     } finally {
       setLoading(false);
     }
