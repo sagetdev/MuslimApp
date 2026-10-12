@@ -88,10 +88,17 @@ async function downloadBundle(): Promise<void> {
   const bundlePath = path.join(OUT_DIR, "quran-all.qbundle");
 
   if (await exists(bundlePath)) {
-    const { size } = await fs.stat(bundlePath);
-    if (size > 1_000_000) {
-      console.log("✅ Bundle déjà présent");
-      return;
+    try {
+      const { size } = await fs.stat(bundlePath);
+      if (size > 1_000_000) {
+        const existing = JSON.parse(await fs.readFile(bundlePath, "utf8")) as BundleResponse;
+        if (Array.isArray(existing.pages) && existing.pages.length === TOTAL_PAGES) {
+          console.log("✅ Bundle complet déjà présent");
+          return;
+        }
+      }
+    } catch {
+      console.warn("⚠️ Bundle local invalide : nouveau téléchargement nécessaire.");
     }
   }
 
