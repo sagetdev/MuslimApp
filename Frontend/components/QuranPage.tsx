@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { loadHafsFont, loadPageFont, pageFont, setFontPriority } from "../src/lib/quranFonts";
+import { getOfflinePage } from "../src/lib/quranOffline";
 import Slider from "@react-native-community/slider";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -30,14 +31,17 @@ const ALL_PAGES = Array.from({ length: TOTAL_PAGES }, (_, i) => i + 1);
 type Props = {
   initialPage?: number;
   onClose?: () => void;
+  offline?: boolean;
 };
 
 function MushafPageItem({
   page,
   containerWidth,
+  offline,
 }: {
   page: number;
   containerWidth: number;
+  offline: boolean;
 }) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createQuranStyles(colors), [colors]);
@@ -61,9 +65,11 @@ function MushafPageItem({
         (async () => {
         try {
             const [response] = await Promise.all([
-            apiFetch<{ data: MushafPageData }>(`/mushaf/pages/${page}`, {
-                priority: "high",
-            }),
+            offline
+              ? getOfflinePage<{ data: MushafPageData }>(page)
+              : apiFetch<{ data: MushafPageData }>(`/mushaf/pages/${page}`, {
+                  priority: "high",
+                }),
             loadHafsFont(),
             loadPageFont(page),
             ]);
@@ -91,7 +97,7 @@ function MushafPageItem({
         return () => {
         active = false;
         };
-    }, [page, reloadKey]);
+    }, [page, reloadKey, offline]);
 
   // Nom de la sourate (issu du banner si présent, sinon null)
   const pageSurahName = useMemo(() => {
@@ -255,7 +261,7 @@ function MushafPageItem({
   );
 }
 
-export default function QuranPage({ initialPage = 1, onClose }: Props) {
+export default function QuranPage({ initialPage = 1, onClose, offline = false }: Props) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createQuranStyles(colors), [colors]);
   const { width } = useWindowDimensions();
@@ -348,7 +354,7 @@ export default function QuranPage({ initialPage = 1, onClose }: Props) {
         })}
         keyExtractor={(item) => String(item)}
         renderItem={({ item }) => (
-          <MushafPageItem page={item} containerWidth={width} />
+          <MushafPageItem page={item} containerWidth={width} offline={offline} />
         )}
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
