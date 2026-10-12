@@ -94,6 +94,17 @@ const JUZ_STARTS: Array<{ juz: number; surah: number; verse: number }> = [
 const FAVORITES_KEY = "muslimapp:quran:favorites:v1";
 const LAST_READ_KEY = "muslimapp:quran:last-read:v1";
 
+function normalizeSurahSearch(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    // Ignore Arabic vowel marks/recitation signs while keeping the Arabic letters.
+    .replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, "")
+    .toLocaleLowerCase()
+    // Ignore spaces, apostrophes, hyphens and other punctuation only for searching.
+    .replace(/[^a-z0-9\u0621-\u064A\u0660-\u0669\u0671-\u06D3]/g, "");
+}
+
 function objectValue(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
 }
@@ -394,8 +405,14 @@ export default function QuranReaderScreen() {
               <Text style={[styles.muted, { fontSize: 12 }]}>Sélectionnez une sourate dans la liste des 114 sourates.</Text>
               <ScrollView nestedScrollEnabled style={{ maxHeight: 300 }} keyboardShouldPersistTaps="handled">
                 {SURAHS.filter((item) => {
-                  const query = surahSearch.trim().toLocaleLowerCase();
-                  return !query || item.name.toLocaleLowerCase().includes(query) || item.arabic.includes(surahSearch.trim()) || String(item.number) === query;
+                  const query = normalizeSurahSearch(surahSearch);
+                  if (!query) return true;
+
+                  return (
+                    normalizeSurahSearch(item.name).includes(query) ||
+                    normalizeSurahSearch(item.arabic).includes(query) ||
+                    normalizeSurahSearch(String(item.number)) === query
+                  );
                 }).map((item) => (
                   <Pressable
                     key={item.number}
