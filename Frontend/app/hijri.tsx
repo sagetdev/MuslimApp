@@ -1,4 +1,4 @@
-import ResourceScreen, { type ResourceConfig } from "../src/components/explore/ResourceScreen";
+import ResourceScreen, { type ResourceConfig } from "../components/RessourceScreen";
 
 const config: ResourceConfig = {
   title: "Date hégirienne",
