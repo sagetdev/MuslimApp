@@ -1,4 +1,3 @@
-
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../../src/theme/ThemeProvider";
@@ -15,13 +14,16 @@ export default function TabsLayout() {
         tabBarStyle: {
           backgroundColor: colors.tabBar,
           borderTopColor: colors.border,
-          height: 64,
-          paddingTop: 7,
-          paddingBottom: 7,
+          borderTopWidth: 1,
+          height: 68,
+          paddingTop: 9,
+          paddingBottom: 8,
+          elevation: 0,
         },
         tabBarLabelStyle: {
           fontSize: 11,
-          fontWeight: "600",
+          fontWeight: "700",
+          marginTop: 2,
         },
       }}
     >
@@ -34,13 +36,21 @@ export default function TabsLayout() {
           ),
         }}
       />
-
       <Tabs.Screen
         name="explore"
         options={{
           title: "Explorer",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="grid-outline" color={color} size={size} />
+            <Ionicons name="compass-outline" color={color} size={size} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="settings"
+        options={{
+          title: "Réglages",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="options-outline" color={color} size={size} />
           ),
         }}
       />
