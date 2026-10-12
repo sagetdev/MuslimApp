@@ -80,7 +80,14 @@ function labelFor(item: RecordValue, index: number): string {
 
 function slugFor(item: RecordValue, index: number): string {
   const raw = getText(item, ["slug", "key", "category", "name", "title", "id"]) || String(index + 1);
-  return raw.toLowerCase().trim().replace(/\\s+/g, "-");
+  return raw
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
 }
 
 const fallbackCategoryIcons: (keyof typeof Ionicons.glyphMap)[] = [
