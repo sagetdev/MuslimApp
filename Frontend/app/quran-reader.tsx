@@ -13,6 +13,10 @@ type Surah = {
   name?: string;
   englishName?: string;
   english_name?: string;
+  name_english?: string;
+  name_translation?: string;
+  name_arabic?: string;
+  verses_count?: number;
   verses?: unknown[];
   ayahs?: unknown[];
 };
@@ -83,7 +87,9 @@ export default function QuranReaderScreen() {
     try {
       const result = await apiFetch<unknown>(`/quran/surahs/${number}`);
       const parsed = extractSurah(result);
-      const ayahs = extractVerses(parsed);
+      // L’API place les métadonnées dans data.surah et les versets dans data.verses.
+      const data = objectValue(objectValue(result).data);
+      const ayahs = extractVerses(data);
       if (!ayahs.length) {
         throw new Error("Cette sourate ne contient pas de versets lisibles dans la réponse du serveur.");
       }
@@ -168,7 +174,7 @@ export default function QuranReaderScreen() {
           <View style={{ flex: 1, gap: 5 }}>
             <Text style={[styles.text, { fontSize: 18, fontWeight: "800" }]}>
               {surah
-                ? firstText(surah as Record<string, unknown>, ["englishName", "english_name", "name"]) ||
+                ? firstText(surah as Record<string, unknown>, ["englishName", "english_name", "name_english", "name"]) ||
                   `Sourate ${input}`
                 : "Choisir une sourate"}
             </Text>
@@ -263,7 +269,10 @@ export default function QuranReaderScreen() {
             verses.map((verse, index) => {
               const id = Number(surah?.number ?? surah?.id ?? Number(input)) * 1000 + index + 1;
               const arabic = firstText(verse, ["text", "arabic", "text_uthmani", "arabicText", "textArabic"]);
-              const translated = firstText(verse, ["translation", "translationText", "text_translation", "english", "meaning"]);
+              const translations = objectValue(verse.translations);
+              const translated =
+                firstText(verse, ["translation", "translationText", "text_translation", "english", "meaning"]) ||
+                firstText(translations, ["french", "sahih_international"]);
               const isCurrent = selectedVerse === index;
 
               return (
