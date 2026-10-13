@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { apiFetch } from "../src/lib/api";
@@ -63,7 +63,7 @@ function getTitle(item: RecordValue, index: number): string {
 }
 
 function getArabic(item: RecordValue): string {
-  return getText(item, ["arabic", "arabicText", "textArabic", "text_ar", "text_arabic", "arabic_text", "nameArabic", "arabicName", "ar", "duaArabic", "dua_arabic", "hadithArabic", "dua"]);
+  return getText(item, ARABIC_KEYS);
 }
 
 function getMeaning(item: RecordValue): string {
@@ -168,7 +168,297 @@ function ResourceValue({ value }: { value: unknown }) {
   return null;
 }
 
-function DetailCard({ item, kind, category, onClose, onPrevious, onNext }: {
+
+// ---------- Hadiths & 99 noms : lecture structurée ----------
+const ARABIC_RE = /[\u0600-\u06FF]/;
+
+const ARABIC_KEYS = ["arabic", "arabicText", "textArabic", "text_ar", "text_arabic", "arabic_text", "nameArabic", "arabicName", "ar", "duaArabic", "dua_arabic", "hadithArabic", "dua"];
+const NARRATOR_KEYS = ["reportedBy", "reported_by", "narratedBy", "narrated_by", "narrator", "transmittedBy", "transmitted_by"];
+const HADITH_TEXT_KEYS = ["translation", "meaning", "text", "textEnglish", "text_english", "english", "hadithEnglish", "body", "content"];
+const EXPLANATION_KEYS = ["explanation", "commentary", "lesson", "lessons", "benefit", "benefits", "takeaway", "reflection", "note", "notes", "significance", "summary", "description", "details", "usage"];
+const TECHNICAL_KEY_RE = /^(id|_id|__v|slug|key|index|_index|createdAt|updatedAt|created_at|updated_at|url|link|urn)$/i;
+
+function looseText(value: unknown): string {
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number") return String(value);
+  if (Array.isArray(value)) return value.map(looseText).filter(Boolean).join(" · ");
+  if (value && typeof value === "object") {
+    const object = value as RecordValue;
+    const grade = looseText(object.grade);
+    if (grade) {
+      const by = looseText(object.graded_by ?? object.gradedBy ?? object.scholar ?? object.by);
+      return by ? `${grade} (${by})` : grade;
+    }
+    for (const key of ["name", "text", "value", "title"]) {
+      const text = looseText(object[key]);
+      if (text) return text;
+    }
+  }
+  return "";
+}
+
+function pickLoose(item: RecordValue, keys: string[], used: Set<string>): string {
+  for (const key of keys) {
+    const text = looseText(item[key]);
+    if (text) {
+      used.add(key);
+      return text;
+    }
+  }
+  return "";
+}
+
+function extrasOf(item: RecordValue, used: Set<string>): [string, unknown][] {
+  return Object.entries(item).filter(
+    ([key, value]) => !used.has(key) && !TECHNICAL_KEY_RE.test(key) && value !== undefined && value !== null && value !== "",
+  );
+}
+
+function splitNarrator(text: string): { narrator: string; body: string } {
+  const match = text.match(/^\s*Narrated\s+([^:\n]{2,80}?)\s*:\s*([\s\S]+)$/i);
+  return match ? { narrator: match[1].trim(), body: match[2].trim() } : { narrator: "", body: text };
+}
+
+function gradeHint(grade: string): string {
+  const g = grade.toLowerCase();
+  if (g.includes("sahih") && g.includes("hasan")) return "Combine les degrés « bon » et « authentique » : un hadith considéré comme fiable.";
+  if (g.includes("sahih") || g.includes("authentic")) return "Authentique : transmis par une chaîne continue de rapporteurs fiables et précis.";
+  if (g.includes("hasan")) return "Bon : fiable, avec un degré de précision légèrement inférieur à « authentique ».";
+  if (g.includes("mawdu") || g.includes("fabricated")) return "Inventé : ne peut pas être attribué au Prophète ﷺ.";
+  if (g.includes("daif") || g.includes("da'if") || g.includes("da’if") || g.includes("weak")) return "Faible : la chaîne de transmission présente une faiblesse.";
+  return "";
+}
+
+type HadithView = {
+  title: string; arabic: string; meaning: string; narrator: string; collection: string;
+  number: string; book: string; source: string; grade: string; hint: string;
+  explanation: string; extras: [string, unknown][];
+};
+
+function buildHadith(item: RecordValue): HadithView {
+  const used = new Set<string>();
+  const collectionRaw = pickLoose(item, ["collectionName", "collection_name", "collection", "bookName", "book_name"], used);
+  const collection = collectionRaw ? humanize(collectionRaw) : "";
+  const number = pickLoose(item, ["hadithNumber", "hadith_number", "hadith_no", "number", "idInBook", "id_in_book"], used);
+  const book = pickLoose(item, ["book", "bookTitle", "book_title", "kitab", "chapter", "chapterTitle", "chapter_title", "bab", "section"], used);
+  let arabic = pickLoose(item, ARABIC_KEYS, used);
+  let meaning = pickLoose(item, HADITH_TEXT_KEYS, used);
+  if (meaning && !arabic && ARABIC_RE.test(meaning)) {
+    arabic = meaning;
+    meaning = "";
+  }
+  let narrator = pickLoose(item, NARRATOR_KEYS, used);
+  if (!narrator && meaning) {
+    const split = splitNarrator(meaning);
+    narrator = split.narrator;
+    meaning = split.body;
+  }
+  const source = pickLoose(item, ["source", "reference", "citation", "attribution", "hadithReference", "hadith_reference"], used);
+  const grade = pickLoose(item, ["grade", "grades", "authenticity", "ruling", "gradeText"], used);
+  const explanation = pickLoose(item, EXPLANATION_KEYS, used);
+  const heading = collection ? `${collection}${number ? ` · n° ${number}` : ""}` : "";
+  const title = heading || pickLoose(item, ["title", "chapterTitle", "chapter_title"], new Set()) || (book ? book : "Hadith");
+  return { title, arabic, meaning, narrator, collection, number, book, source, grade, hint: grade ? gradeHint(grade) : "", explanation, extras: extrasOf(item, used) };
+}
+
+type NameView = {
+  title: string; arabic: string; latin: string; meaning: string; explanation: string;
+  number: string; extras: [string, unknown][];
+};
+
+function buildName(item: RecordValue, index = 0): NameView {
+  const used = new Set<string>();
+  const numberRaw = pickLoose(item, ["number", "no", "id", "index", "order"], used);
+  const number = /^\d{1,3}$/.test(numberRaw) ? numberRaw : "";
+  let arabic = pickLoose(item, ARABIC_KEYS, used);
+  let latin = "";
+  for (const key of ["transliteration", "transliterated", "latin", "nameTransliteration", "name_transliteration", "pronunciation", "romanization", "romanized", "name", "nameEnglish", "title"]) {
+    const text = looseText(item[key]);
+    if (!text) continue;
+    used.add(key);
+    if (ARABIC_RE.test(text)) {
+      if (!arabic) arabic = text;
+    } else if (!latin) {
+      latin = text;
+    }
+  }
+  let meaning = pickLoose(item, ["meaning", "meaningEnglish", "englishMeaning", "translation", "english", "text", "textEnglish", "text_english"], used);
+  if (meaning === latin) meaning = "";
+  let explanation = pickLoose(item, EXPLANATION_KEYS, used);
+  if (explanation === meaning) explanation = "";
+  if (!meaning && explanation) {
+    meaning = explanation;
+    explanation = "";
+  }
+  const title = latin || meaning || `Nom ${number || index + 1}`;
+  return { title, arabic, latin, meaning, explanation, number, extras: extrasOf(item, used) };
+}
+
+function Chip({ icon, label }: { icon: keyof typeof Ionicons.glyphMap; label: string }) {
+  const { colors } = useAppTheme();
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 7, borderRadius: 14, paddingHorizontal: 11, paddingVertical: 8, backgroundColor: colors.surfaceAlt }}>
+      <Ionicons name={icon} size={15} color={colors.primary} />
+      <Text style={{ color: colors.primary, fontSize: 12, fontWeight: "800" }}>{label}</Text>
+    </View>
+  );
+}
+
+function InfoBlock({ icon, label, text }: { icon: keyof typeof Ionicons.glyphMap; label: string; text: string }) {
+  const { colors } = useAppTheme();
+  return (
+    <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
+      <Ionicons name={icon} size={18} color={colors.primary} style={{ marginTop: 1 }} />
+      <View style={{ flex: 1, gap: 3 }}>
+        <Text style={{ color: colors.primary, fontSize: 12, fontWeight: "900" }}>{label}</Text>
+        <Text style={{ color: colors.text, fontSize: 13, lineHeight: 20 }}>{text}</Text>
+      </View>
+    </View>
+  );
+}
+
+function ArabicBlock({ text, large }: { text: string; large?: boolean }) {
+  const { colors } = useAppTheme();
+  if (!text) return null;
+  return (
+    <View style={{ backgroundColor: colors.surfaceAlt, borderRadius: 20, paddingHorizontal: 17, paddingVertical: 22, gap: 8 }}>
+      <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1 }}>TEXTE ARABE</Text>
+      <Text style={{ color: colors.text, fontSize: large ? 34 : 27, lineHeight: large ? 55 : 48, textAlign: "right", writingDirection: "rtl" }}>{text}</Text>
+    </View>
+  );
+}
+
+function DetailShell({ eyebrow, title, onClose, onPrevious, onNext, children }: {
+  eyebrow: string; title: string; onClose: () => void; onPrevious?: () => void; onNext?: () => void; children: ReactNode;
+}) {
+  const { colors } = useAppTheme();
+  return (
+    <View style={{ borderRadius: 24, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, padding: 20, gap: 17 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+        <View style={{ flex: 1, gap: 5 }}>
+          <Text style={{ color: colors.primary, fontSize: 10, fontWeight: "900", letterSpacing: 1.5 }}>{eyebrow}</Text>
+          <Text style={{ color: colors.text, fontSize: 21, fontWeight: "800" }}>{title}</Text>
+        </View>
+        <Pressable accessibilityRole="button" accessibilityLabel="Fermer le détail" onPress={onClose} style={{ padding: 8, borderRadius: 12, backgroundColor: colors.surfaceAlt }}>
+          <Ionicons name="close" size={20} color={colors.muted} />
+        </Pressable>
+      </View>
+      {children}
+      {onPrevious || onNext ? (
+        <View style={{ flexDirection: "row", gap: 10, marginTop: 2 }}>
+          {onPrevious ? (
+            <Pressable accessibilityRole="button" onPress={onPrevious} style={{ flex: 1, borderWidth: 1, borderColor: colors.border, borderRadius: 14, padding: 13, alignItems: "center" }}>
+              <Text style={{ color: colors.text, fontWeight: "700" }}>Précédent</Text>
+            </Pressable>
+          ) : null}
+          {onNext ? (
+            <Pressable accessibilityRole="button" onPress={onNext} style={{ flex: 1, backgroundColor: colors.primary, borderRadius: 14, padding: 13, alignItems: "center" }}>
+              <Text style={{ color: colors.primaryText, fontWeight: "800" }}>Suivant</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function SectionText({ label, text }: { label: string; text: string }) {
+  const { colors } = useAppTheme();
+  if (!text) return null;
+  return (
+    <View style={{ gap: 7 }}>
+      <Text style={{ color: colors.primary, fontSize: 10, fontWeight: "900", letterSpacing: 1.2 }}>{label}</Text>
+      <Text style={{ color: colors.text, fontSize: 15, lineHeight: 25 }}>{text}</Text>
+    </View>
+  );
+}
+
+function ExtraDetails({ entries }: { entries: [string, unknown][] }) {
+  const { colors } = useAppTheme();
+  if (!entries.length) return null;
+  return (
+    <View style={{ borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 15, gap: 10 }}>
+      <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "900", letterSpacing: 1.2 }}>INFORMATIONS COMPLÉMENTAIRES</Text>
+      <ResourceValue value={Object.fromEntries(entries)} />
+    </View>
+  );
+}
+
+type DetailBaseProps = { item: RecordValue; onClose: () => void; onPrevious?: () => void; onNext?: () => void };
+
+function HadithDetail({ item, onClose, onPrevious, onNext }: DetailBaseProps) {
+  const { colors } = useAppTheme();
+  const h = buildHadith(item);
+  const referenceRows: { icon: keyof typeof Ionicons.glyphMap; label: string; text: string }[] = [
+    { icon: "library-outline" as const, label: "Recueil", text: h.collection },
+    { icon: "pricetag-outline" as const, label: "Numéro", text: h.number },
+    { icon: "bookmark-outline" as const, label: "Livre / chapitre", text: h.book },
+    { icon: "book-outline" as const, label: "Source / référence", text: h.source },
+  ].filter((row) => row.text);
+  return (
+    <DetailShell eyebrow="LECTURE & RÉFLEXION" title={h.title} onClose={onClose} onPrevious={onPrevious} onNext={onNext}>
+      {h.grade ? (
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          <Chip icon="shield-checkmark-outline" label={h.grade} />
+        </View>
+      ) : null}
+      <ArabicBlock text={h.arabic} />
+      {h.narrator ? (
+        <View style={{ borderRadius: 16, borderWidth: 1, borderColor: colors.border, padding: 13 }}>
+          <InfoBlock icon="people-outline" label="Rapporté par" text={h.narrator} />
+        </View>
+      ) : null}
+      <SectionText label="TEXTE DU HADITH" text={h.meaning} />
+      {h.hint ? (
+        <View style={{ borderRadius: 18, padding: 15, backgroundColor: colors.surfaceAlt }}>
+          <InfoBlock icon="shield-checkmark-outline" label="Que signifie ce degré ?" text={h.hint} />
+        </View>
+      ) : null}
+      {h.explanation ? (
+        <View style={{ borderRadius: 18, padding: 15, backgroundColor: colors.surfaceAlt }}>
+          <InfoBlock icon="bulb-outline" label="À retenir" text={h.explanation} />
+        </View>
+      ) : null}
+      {referenceRows.length ? (
+        <View style={{ borderRadius: 16, borderWidth: 1, borderColor: colors.border, padding: 13, gap: 12 }}>
+          {referenceRows.map((row) => <InfoBlock key={row.label} icon={row.icon} label={row.label} text={row.text} />)}
+        </View>
+      ) : null}
+      <ExtraDetails entries={h.extras} />
+      {!h.arabic && !h.meaning ? (
+        <Text style={{ color: colors.muted, lineHeight: 22 }}>Aucun texte n’est fourni pour ce hadith.</Text>
+      ) : null}
+    </DetailShell>
+  );
+}
+
+function NameDetail({ item, onClose, onPrevious, onNext }: DetailBaseProps) {
+  const { colors } = useAppTheme();
+  const n = buildName(item);
+  return (
+    <DetailShell eyebrow="APPRENDRE UN NOM" title={n.title} onClose={onClose} onPrevious={onPrevious} onNext={onNext}>
+      {n.number ? (
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          <Chip icon="ribbon-outline" label={`Nom n° ${n.number} sur 99`} />
+        </View>
+      ) : null}
+      <ArabicBlock text={n.arabic} large />
+      {n.latin && n.latin !== n.title ? <SectionText label="PRONONCIATION" text={n.latin} /> : null}
+      <SectionText label="SIGNIFICATION" text={n.meaning} />
+      {n.explanation ? (
+        <View style={{ borderRadius: 18, padding: 15, backgroundColor: colors.surfaceAlt }}>
+          <InfoBlock icon="bulb-outline" label="Pour mieux comprendre" text={n.explanation} />
+        </View>
+      ) : null}
+      <ExtraDetails entries={n.extras} />
+      {!n.arabic && !n.meaning ? (
+        <Text style={{ color: colors.muted, lineHeight: 22 }}>Aucun détail n’est fourni pour ce nom.</Text>
+      ) : null}
+    </DetailShell>
+  );
+}
+
+function DuaDetail({ item, kind, category, onClose, onPrevious, onNext }: {
   item: RecordValue;
   kind: ResourceKind;
   category?: string;
@@ -277,6 +567,19 @@ function DetailCard({ item, kind, category, onClose, onPrevious, onNext }: {
       ) : null}
     </View>
   );
+}
+
+function DetailCard(props: {
+  item: RecordValue;
+  kind: ResourceKind;
+  category?: string;
+  onClose: () => void;
+  onPrevious?: () => void;
+  onNext?: () => void;
+}) {
+  if (props.kind === "hadith") return <HadithDetail {...props} />;
+  if (props.kind === "names") return <NameDetail {...props} />;
+  return <DuaDetail {...props} />;
 }
 
 export default function ResourceScreen({ config }: { config: ResourceConfig }) {
@@ -521,22 +824,29 @@ export default function ResourceScreen({ config }: { config: ResourceConfig }) {
             </View>
             {kind === "names" ? (
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-                {records.map((item, index) => (
+                {records.map((item, index) => {
+                  const nameCard = buildName(item, index);
+                  return (
                   <Pressable key={getId(item, index)} accessibilityRole="button" onPress={() => setSelectedItem(item)} style={({ pressed }) => ({ width: "31%", flexGrow: 1, minHeight: 125, alignItems: "center", justifyContent: "center", padding: 10, gap: 8, borderRadius: 19, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, opacity: pressed ? 0.75 : 1 })}>
-                    <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "800" }}>{getText(item, ["number", "no", "id"]) || String(index + 1).padStart(2, "0")}</Text>
-                    <Text numberOfLines={1} style={{ color: colors.text, fontSize: 25, lineHeight: 37, writingDirection: "rtl" }}>{getArabic(item) || getTitle(item, index)}</Text>
-                    <Text numberOfLines={2} style={{ color: colors.primary, textAlign: "center", fontSize: 11, fontWeight: "800" }}>{getMeaning(item) || getTitle(item, index)}</Text>
+                    <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "800" }}>{nameCard.number || String(index + 1).padStart(2, "0")}</Text>
+                    <Text numberOfLines={1} style={{ color: colors.text, fontSize: 25, lineHeight: 37, writingDirection: "rtl" }}>{nameCard.arabic || nameCard.title}</Text>
+                    {nameCard.latin ? <Text numberOfLines={1} style={{ color: colors.muted, fontSize: 11 }}>{nameCard.latin}</Text> : null}
+                    <Text numberOfLines={2} style={{ color: colors.primary, textAlign: "center", fontSize: 11, fontWeight: "800" }}>{nameCard.meaning || nameCard.title}</Text>
                     <Ionicons name="arrow-forward-circle-outline" size={17} color={colors.muted} />
                   </Pressable>
-                ))}
+                  );
+                })}
               </View>
             ) : (
               <View style={{ gap: 11 }}>
                 {records.map((item, index) => {
-                  const title = getTitle(item, index);
-                  const arabic = getArabic(item);
-                  const meaning = getMeaning(item);
-                  const reference = getText(item, ["reference", "source", "book", "hadithNumber", "number", "grade", "authenticity"]);
+                  const hadith = kind === "hadith" ? buildHadith(item) : null;
+                  const title = hadith ? hadith.title : getTitle(item, index);
+                  const arabic = hadith ? hadith.arabic : getArabic(item);
+                  const meaning = hadith ? hadith.meaning : getMeaning(item);
+                  const reference = hadith
+                    ? [hadith.narrator ? `Rapporté par ${hadith.narrator}` : "", hadith.grade].filter(Boolean).join(" · ")
+                    : getText(item, ["reference", "source", "book", "hadithNumber", "number", "grade", "authenticity"]);
                   return (
                     <Pressable key={getId(item, index)} accessibilityRole="button" onPress={() => setSelectedItem(item)} style={({ pressed }) => ({ padding: 17, borderRadius: 21, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, gap: 12, opacity: pressed ? 0.8 : 1 })}>
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 9 }}>
