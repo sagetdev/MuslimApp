@@ -31,10 +31,18 @@ type ApiFetchOptions = {
 };
 
 function getApiUrl(): string {
-  if (!API_URL) {
-    throw new Error("EXPO_PUBLIC_API_URL est manquant dans le fichier .env");
+  if (API_URL) return API_URL.replace(/\/+$/, "");
+
+  // Version web servie par le même serveur que l'API : on utilise la même origine.
+  if (
+    typeof window !== "undefined" &&
+    typeof window.location !== "undefined" &&
+    /^https?:/.test(window.location.origin)
+  ) {
+    return `${window.location.origin}/api`;
   }
-  return API_URL.replace(/\/+$/, "");
+
+  throw new Error("EXPO_PUBLIC_API_URL est manquant dans le fichier .env");
 }
 
 function parseMushafPage(endpoint: string): number | null {

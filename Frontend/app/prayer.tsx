@@ -1,4 +1,3 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import BackButton from "../components/BackButton";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
@@ -7,8 +6,14 @@ import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-nati
 import { SafeAreaView } from "react-native-safe-area-context";
 import { apiFetch } from "../src/lib/api";
 import { useAppTheme } from "../src/theme/ThemeProvider";
-
-const PREF_KEY = "muslimapp:prayer-preferences:v1";
+import {
+  DEFAULT_PRAYER_PREFS,
+  MADHABS,
+  PRAYER_METHODS,
+  loadPrayerPrefs,
+  savePrayerPrefs,
+  type PrayerPrefs,
+} from "../src/lib/prayerPrefs";
 
 const prayers = [
   { name: "Fajr", icon: "cloudy-night-outline" as const },
@@ -18,13 +23,6 @@ const prayers = [
   { name: "Isha", icon: "moon-outline" as const },
 ];
 
-const methods = [
-  { label: "Muslim World League", value: "MWL" },
-  { label: "Umm Al-Qura", value: "UmmAlQura" },
-  { label: "Egyptian", value: "Egyptian" },
-  { label: "Karachi", value: "Karachi" },
-  { label: "North America (ISNA)", value: "ISNA" },
-];
 
 function findTimes(value: unknown): Record<string, string> {
   const out: Record<string, string> = {};
@@ -53,24 +51,35 @@ function findTimes(value: unknown): Record<string, string> {
 export default function PrayerScreen() {
   const { colors } = useAppTheme();
   const [times, setTimes] = useState<Record<string, string>>({});
-  const [method, setMethod] = useState("MWL");
-  const [madhab, setMadhab] = useState("shafi");
+  const [prefs, setPrefs] = useState<PrayerPrefs | null>(null);
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
   const [now, setNow] = useState(Date.now());
   const [nextPrayer, setNextPrayer] = useState<{ name: string; time: Date } | null>(null);
 
+  const method = prefs?.method ?? DEFAULT_PRAYER_PREFS.method;
+  const madhab = prefs?.madhab ?? DEFAULT_PRAYER_PREFS.madhab;
+
+  // Les préférences sont lues une seule fois, avant le premier calcul des horaires.
+  useEffect(() => {
+    let active = true;
+    void loadPrayerPrefs().then((loaded) => {
+      if (active) setPrefs(loaded);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const load = useCallback(async () => {
+    if (!prefs) return;
     setLoading(true);
     setStatus("");
     try {
-      const raw = await AsyncStorage.getItem(PREF_KEY);
-      if (raw) {
-        const pref = JSON.parse(raw) as { method?: string; madhab?: string };
-        if (pref.method) setMethod(pref.method);
-        if (pref.madhab) setMadhab(pref.madhab);
+      let perm = await Location.getForegroundPermissionsAsync();
+      if (perm.status !== "granted") {
+        perm = await Location.requestForegroundPermissionsAsync();
       }
-      const perm = await Location.getForegroundPermissionsAsync();
       if (perm.status !== "granted") {
         throw new Error("La localisation est nécessaire pour calculer les horaires de ta position.");
       }
@@ -80,18 +89,22 @@ export default function PrayerScreen() {
           lat: pos.coords.latitude,
           lng: pos.coords.longitude,
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
-          method,
-          madhab,
+          method: prefs.method,
+          madhab: prefs.madhab,
           highLatitudeRule: "seventhofthenight",
         },
       });
-      setTimes(findTimes(result));
+      const found = findTimes(result);
+      if (Object.keys(found).length === 0) {
+        throw new Error("Aucun horaire reçu pour ta position. Réessaie dans un instant.");
+      }
+      setTimes(found);
     } catch (e) {
       setStatus(e instanceof Error ? e.message : "Impossible de charger les horaires.");
     } finally {
       setLoading(false);
     }
-  }, [method, madhab]);
+  }, [prefs]);
 
   useEffect(() => {
     void load();
@@ -119,10 +132,10 @@ export default function PrayerScreen() {
     setNextPrayer(candidates[0] ?? null);
   }, [times, now]);
 
-  const save = async (m: string, md: string) => {
-    setMethod(m);
-    setMadhab(md);
-    await AsyncStorage.setItem(PREF_KEY, JSON.stringify({ method: m, madhab: md }));
+  const save = (m: string, md: PrayerPrefs["madhab"]) => {
+    const next = { method: m, madhab: md };
+    setPrefs(next);
+    void savePrayerPrefs(next);
   };
 
   const countdown = nextPrayer
@@ -218,7 +231,7 @@ export default function PrayerScreen() {
           ))}
 
           {loading ? <ActivityIndicator color={colors.primary} /> : null}
-          {status ? <Text style={{ color: "#E57373", lineHeight: 20 }}>{status}</Text> : null}
+          {status ? <Text style={{ color: colors.danger, lineHeight: 20 }}>{status}</Text> : null}
 
           <Pressable
             onPress={() => void load()}
@@ -251,10 +264,10 @@ export default function PrayerScreen() {
 
           <Text style={{ color: colors.muted, fontSize: 12 }}>Méthode</Text>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            {methods.map((m) => (
+            {PRAYER_METHODS.map((m) => (
               <Pressable
                 key={m.value}
-                onPress={() => void save(m.value, madhab)}
+                onPress={() => save(m.value, madhab)}
                 style={{
                   padding: 10,
                   borderRadius: 12,
@@ -278,13 +291,10 @@ export default function PrayerScreen() {
 
           <Text style={{ color: colors.muted, fontSize: 12 }}>Calcul de Asr</Text>
           <View style={{ flexDirection: "row", gap: 8 }}>
-            {[
-              { label: "Shafi'i", value: "shafi" },
-              { label: "Hanafi", value: "hanafi" },
-            ].map((m) => (
+            {MADHABS.map((m) => (
               <Pressable
                 key={m.value}
-                onPress={() => void save(method, m.value)}
+                onPress={() => save(method, m.value)}
                 style={{
                   padding: 11,
                   borderRadius: 12,

@@ -12,6 +12,7 @@ const pages = [
   { title: "Hadiths", subtitle: "Découvrir les enseignements prophétiques", icon: "library-outline" as const, route: "/hadith" as const },
   { title: "Invocations", subtitle: "Retrouver les duas et adhkar", icon: "heart-outline" as const, route: "/adhkar" as const },
   { title: "Les 99 noms d’Allah", subtitle: "Explorer les beaux noms d’Allah", icon: "flower-outline" as const, route: "/names" as const },
+  { title: "Tasbih", subtitle: "Compter tes dhikr, avec suivi quotidien", icon: "radio-button-on-outline" as const, route: "/tasbih" as const },
   { title: "Date hégirienne", subtitle: "Consulter le calendrier hégirien", icon: "calendar-outline" as const, route: "/hijri" as const },
 ];
 

@@ -71,7 +71,7 @@ function getMeaning(item: RecordValue): string {
 }
 
 function humanize(key: string): string {
-  return key.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/[_-]/g, " ").replace(/\\b\\w/g, (letter) => letter.toUpperCase());
+  return key.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/[_-]/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function labelFor(item: RecordValue, index: number): string {
@@ -122,7 +122,7 @@ const categoryIconRules: Array<{ terms: string[]; icon: keyof typeof Ionicons.gl
 function normalizeCategoryText(value: string): string {
   return value
     .normalize("NFD")
-    .replace(/[\\u0300-\\u036f]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ")
     .trim();

@@ -18,6 +18,21 @@ export const errorHandler: ErrorRequestHandler = (
     return;
   }
 
+  // Erreurs 4xx émises par Express/body-parser (JSON invalide, payload trop gros…).
+  const status =
+    typeof error?.status === "number" ? error.status : error?.statusCode;
+
+  if (typeof status === "number" && status >= 400 && status < 500) {
+    res.status(status).json({
+      error: {
+        code: "BAD_REQUEST",
+        message:
+          status === 413 ? "Request body is too large." : "Invalid request.",
+      },
+    });
+    return;
+  }
+
   console.error("Unhandled API error:", error);
 
   res.status(500).json({

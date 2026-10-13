@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import * as Location from "expo-location";
 import { apiFetch } from "../../src/lib/api";
+import { loadPrayerPrefs } from "../../src/lib/prayerPrefs";
 import {
   Pressable,
   ScrollView,
@@ -49,6 +50,18 @@ const features = [
     title: "99 noms d'Allah",
     subtitle: "Asma ul Husna",
     icon: "flower-outline" as const,
+    route: "/explore",
+  },
+  {
+    title: "Tasbih",
+    subtitle: "Compteur de dhikr",
+    icon: "radio-button-on-outline" as const,
+    route: "/explore",
+  },
+  {
+    title: "Calendrier",
+    subtitle: "Date hégirienne",
+    icon: "calendar-outline" as const,
     route: "/explore",
   },
 ];
@@ -128,15 +141,18 @@ export default function DashboardScreen() {
           throw new Error("Autorise la localisation pour afficher les horaires locaux.");
         }
 
-        const position = await Location.getCurrentPositionAsync({});
+        const [position, prefs] = await Promise.all([
+          Location.getCurrentPositionAsync({}),
+          loadPrayerPrefs(),
+        ]);
         const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
         const response = await apiFetch<unknown>("/prayer-times", {
           params: {
             lat: position.coords.latitude,
             lng: position.coords.longitude,
             timezone,
-            method: "MWL",
-            madhab: "shafi",
+            method: prefs.method,
+            madhab: prefs.madhab,
             highLatitudeRule: "seventhofthenight",
           },
         });
@@ -185,7 +201,7 @@ export default function DashboardScreen() {
   }).format(new Date());
 
   function openFeature(title: string) {
-    const routeByTitle: Record<string, "/quran-reader" | "/prayer" | "/qibla" | "/adhkar" | "/hadith" | "/names" | "/explore"> = {
+    const routeByTitle: Record<string, "/quran-reader" | "/prayer" | "/qibla" | "/adhkar" | "/hadith" | "/names" | "/tasbih" | "/hijri" | "/explore"> = {
       "Le Coran": "/quran-reader",
       Horaires: "/prayer",
       "Horaires de prière": "/prayer",
@@ -193,6 +209,8 @@ export default function DashboardScreen() {
       Hadiths: "/hadith",
       Invocations: "/adhkar",
       "99 noms d'Allah": "/names",
+      Tasbih: "/tasbih",
+      Calendrier: "/hijri",
     };
     router.push(routeByTitle[title] ?? "/explore");
   }
