@@ -442,6 +442,34 @@ export default function HijriScreen() {
         </View>
 
         <View style={{ gap: 12 }}>
+          {nextEvent ? (
+            <View style={{ backgroundColor: colors.surface, borderColor: colors.primary, borderWidth: 1.5, borderRadius: 22, padding: 17, gap: 13 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <View style={{ width: 42, height: 42, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: colors.surfaceAlt }}>
+                  <Ionicons name="hourglass-outline" size={21} color={colors.primary} />
+                </View>
+                <View style={{ flex: 1, gap: 3 }}>
+                  <Text style={{ color: colors.primary, fontSize: 10, fontWeight: "900", letterSpacing: 1.2 }}>PROCHAIN ÉVÉNEMENT</Text>
+                  <Text style={{ color: colors.text, fontSize: 17, fontWeight: "900" }}>{nextEvent.title}</Text>
+                  <Text style={{ color: colors.muted, fontSize: 12 }}>{nextEvent.gregorianDate ? longDateLabel(parseDateKey(nextEvent.gregorianDate)) : nextEvent.dateLabel}</Text>
+                </View>
+              </View>
+              <View style={{ flexDirection: "row", gap: 7 }}>
+                {[
+                  { value: countdownDays, label: "JOURS" },
+                  { value: countdownHours, label: "HEURES" },
+                  { value: countdownMinutes, label: "MIN" },
+                  { value: countdownSeconds, label: "SEC" },
+                ].map((unit) => (
+                  <View key={unit.label} style={{ flex: 1, alignItems: "center", paddingVertical: 11, borderRadius: 13, backgroundColor: colors.surfaceAlt, gap: 3 }}>
+                    <Text style={{ color: colors.primary, fontSize: 23, fontWeight: "900", fontVariant: ["tabular-nums"] }}>{String(unit.value).padStart(2, "0")}</Text>
+                    <Text style={{ color: colors.muted, fontSize: 9, fontWeight: "800", letterSpacing: 0.6 }}>{unit.label}</Text>
+                  </View>
+                ))}
+              </View>
+              {nextEvent.description ? <Text style={{ color: colors.muted, fontSize: 12, lineHeight: 19 }}>{nextEvent.description}</Text> : null}
+            </View>
+          ) : null}
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
             <Text style={{ color: colors.text, fontSize: 19, fontWeight: "900" }}>Repères islamiques</Text>
             <Text style={{ color: colors.muted, fontSize: 11 }}>{events.length ? `${events.length} repère${events.length > 1 ? "s" : ""}` : ""}</Text>
