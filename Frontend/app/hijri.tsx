@@ -10,6 +10,36 @@ type RecordValue = Record<string, unknown>;
 type HijriParts = { day: number; month: number; year: number; monthName: string };
 type IslamicEvent = { id: string; title: string; dateLabel: string; gregorianDate?: string; hijriDay?: number; hijriMonth?: number; description?: string };
 
+type CountdownColors = { primary: string; muted: string; surfaceAlt: string };
+
+function EventCountdown({ targetTime, colors }: { targetTime: number; colors: CountdownColors }) {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const remaining = Math.max(0, targetTime - now);
+  const units = [
+    { value: Math.floor(remaining / 86_400_000), label: "JOURS" },
+    { value: Math.floor((remaining % 86_400_000) / 3_600_000), label: "HEURES" },
+    { value: Math.floor((remaining % 3_600_000) / 60_000), label: "MIN" },
+    { value: Math.floor((remaining % 60_000) / 1000), label: "SEC" },
+  ];
+
+  return (
+    <View accessibilityLabel={`Décompte avant l’événement`} style={{ flexDirection: "row", gap: 7 }}>
+      {units.map((unit) => (
+        <View key={unit.label} style={{ flex: 1, alignItems: "center", paddingVertical: 11, borderRadius: 13, backgroundColor: colors.surfaceAlt, gap: 3 }}>
+          <Text style={{ color: colors.primary, fontSize: 23, fontWeight: "900", fontVariant: ["tabular-nums"] }}>{String(unit.value).padStart(2, "0")}</Text>
+          <Text style={{ color: colors.muted, fontSize: 9, fontWeight: "800", letterSpacing: 0.6 }}>{unit.label}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 const WEEKDAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 const HIJRI_MONTHS = [
   "Mouharram", "Safar", "Rabia al-awwal", "Rabia ath-thani",
@@ -160,7 +190,6 @@ export default function HijriScreen() {
   const [loadingEvents, setLoadingEvents] = useState(true);
   const [dateError, setDateError] = useState("");
   const [eventsError, setEventsError] = useState("");
-  const [clockNow, setClockNow] = useState(() => Date.now());
 
   const selectedDate = useMemo(() => parseDateKey(selectedKey), [selectedKey]);
   const selectedHijri = useMemo(() => readHijriParts(selectedDate), [selectedDate]);
@@ -205,10 +234,6 @@ export default function HijriScreen() {
 
   useEffect(() => { void loadSelectedDate(); }, [loadSelectedDate]);
   useEffect(() => { void loadCalendarData(); }, [loadCalendarData]);
-  useEffect(() => {
-    const timer = setInterval(() => setClockNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, []);
 
   const calendarDays = useMemo(() => {
     const firstDay = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), 1, 12);
@@ -252,12 +277,7 @@ export default function HijriScreen() {
   }, [events, todayKey]);
 
   const nextEvent = upcomingEvents[0];
-  const nextEventTarget = nextEvent?.gregorianDate ? parseDateKey(nextEvent.gregorianDate).getTime() : null;
-  const countdownMs = nextEventTarget === null ? null : Math.max(0, nextEventTarget - clockNow);
-  const countdownDays = countdownMs === null ? 0 : Math.floor(countdownMs / 86_400_000);
-  const countdownHours = countdownMs === null ? 0 : Math.floor((countdownMs % 86_400_000) / 3_600_000);
-  const countdownMinutes = countdownMs === null ? 0 : Math.floor((countdownMs % 3_600_000) / 60_000);
-  const countdownSeconds = countdownMs === null ? 0 : Math.floor((countdownMs % 60_000) / 1000);
+  const nextEventTarget = nextEvent?.gregorianDate ? new Date(`${nextEvent.gregorianDate}T00:00:00`).getTime() : null;
 
   const changeMonth = (amount: number) => {
     setVisibleMonth((current) => new Date(current.getFullYear(), current.getMonth() + amount, 1, 12));
@@ -454,19 +474,14 @@ export default function HijriScreen() {
                   <Text style={{ color: colors.muted, fontSize: 12 }}>{nextEvent.gregorianDate ? longDateLabel(parseDateKey(nextEvent.gregorianDate)) : nextEvent.dateLabel}</Text>
                 </View>
               </View>
-              <View style={{ flexDirection: "row", gap: 7 }}>
-                {[
-                  { value: countdownDays, label: "JOURS" },
-                  { value: countdownHours, label: "HEURES" },
-                  { value: countdownMinutes, label: "MIN" },
-                  { value: countdownSeconds, label: "SEC" },
-                ].map((unit) => (
-                  <View key={unit.label} style={{ flex: 1, alignItems: "center", paddingVertical: 11, borderRadius: 13, backgroundColor: colors.surfaceAlt, gap: 3 }}>
-                    <Text style={{ color: colors.primary, fontSize: 23, fontWeight: "900", fontVariant: ["tabular-nums"] }}>{String(unit.value).padStart(2, "0")}</Text>
-                    <Text style={{ color: colors.muted, fontSize: 9, fontWeight: "800", letterSpacing: 0.6 }}>{unit.label}</Text>
-                  </View>
-                ))}
-              </View>
+              {nextEventTarget !== null && nextEventTarget <= Date.now() ? (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8, padding: 12, borderRadius: 13, backgroundColor: colors.surfaceAlt }}>
+                  <Ionicons name="calendar-outline" size={17} color={colors.primary} />
+                  <Text style={{ color: colors.primary, fontSize: 13, fontWeight: "800" }}>C’est aujourd’hui</Text>
+                </View>
+              ) : nextEventTarget !== null ? (
+                <EventCountdown targetTime={nextEventTarget} colors={{ primary: colors.primary, muted: colors.muted, surfaceAlt: colors.surfaceAlt }} />
+              ) : null}
               {nextEvent.description ? <Text style={{ color: colors.muted, fontSize: 12, lineHeight: 19 }}>{nextEvent.description}</Text> : null}
             </View>
           ) : null}
