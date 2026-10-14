@@ -186,6 +186,16 @@ function normalizeEvent(item: RecordValue, index: number): IslamicEvent {
   };
 }
 
+function findNextGregorianDateForHijri(day: number | undefined, month: number | undefined, fromDate: Date): string | undefined {
+  if (!day || !month) return undefined;
+  for (let offset = 0; offset <= 370; offset++) {
+    const candidate = new Date(fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate() + offset, 12);
+    const hijri = readHijriParts(candidate);
+    if (hijri?.day === day && hijri.month === month) return localDateKey(candidate);
+  }
+  return undefined;
+}
+
 function monthLabel(date: Date): string {
   return new Intl.DateTimeFormat("fr-CA", { month: "long", year: "numeric" }).format(date);
 }
@@ -299,15 +309,20 @@ export default function HijriScreen() {
   }, [events, selectedKey, selectedHijri]);
 
   const upcomingEvents = useMemo(() => {
-    const now = new Date(todayKey + "T00:00:00");
+    const todayDate = parseDateKey(todayKey);
     return events
-      .filter((event) => event.gregorianDate && parseDateKey(event.gregorianDate).getTime() >= now.getTime())
-      .sort((a, b) => (a.gregorianDate ?? "").localeCompare(b.gregorianDate ?? ""))
+      .map((event) => ({
+        ...event,
+        countdownDate: event.gregorianDate ?? findNextGregorianDateForHijri(event.hijriDay, event.hijriMonth, todayDate),
+      }))
+      .filter((event) => event.countdownDate && parseDateKey(event.countdownDate).getTime() >= todayDate.getTime())
+      .sort((a, b) => (a.countdownDate ?? "").localeCompare(b.countdownDate ?? ""))
       .slice(0, 3);
   }, [events, todayKey]);
 
   const nextEvent = upcomingEvents[0];
-  const nextEventTarget = nextEvent?.gregorianDate ? new Date(`${nextEvent.gregorianDate}T00:00:00`).getTime() : null;
+  const nextEventDate = nextEvent?.countdownDate;
+  const nextEventTarget = nextEventDate ? parseDateKey(nextEventDate).getTime() : null;
 
   const changeMonth = (amount: number) => {
     setVisibleMonth((current) => new Date(current.getFullYear(), current.getMonth() + amount, 1, 12));
@@ -501,7 +516,7 @@ export default function HijriScreen() {
                 <View style={{ flex: 1, gap: 3 }}>
                   <Text style={{ color: colors.primary, fontSize: 10, fontWeight: "900", letterSpacing: 1.2 }}>PROCHAIN ÉVÉNEMENT</Text>
                   <Text style={{ color: colors.text, fontSize: 17, fontWeight: "900" }}>{nextEvent.title}</Text>
-                  <Text style={{ color: colors.muted, fontSize: 12 }}>{nextEvent.gregorianDate ? longDateLabel(parseDateKey(nextEvent.gregorianDate)) : nextEvent.dateLabel}</Text>
+                  <Text style={{ color: colors.muted, fontSize: 12 }}>{nextEventDate ? longDateLabel(parseDateKey(nextEventDate)) : nextEvent.dateLabel}</Text>
                 </View>
               </View>
               {nextEventTarget !== null && nextEventTarget <= Date.now() ? (
