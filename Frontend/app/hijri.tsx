@@ -21,6 +21,14 @@ function EventCountdown({ targetTime, colors }: { targetTime: number; colors: Co
   }, []);
 
   const remaining = Math.max(0, targetTime - now);
+  if (remaining === 0) {
+    return (
+      <View accessibilityLabel="L’événement a lieu aujourd’hui" style={{ flexDirection: "row", alignItems: "center", gap: 8, padding: 12, borderRadius: 13, backgroundColor: colors.surfaceAlt }}>
+        <Ionicons name="calendar-outline" size={17} color={colors.primary} />
+        <Text style={{ color: colors.primary, fontSize: 13, fontWeight: "800" }}>C’est aujourd’hui</Text>
+      </View>
+    );
+  }
   const units = [
     { value: Math.floor(remaining / 86_400_000), label: "JOURS" },
     { value: Math.floor((remaining % 86_400_000) / 3_600_000), label: "HEURES" },
@@ -324,8 +332,8 @@ export default function HijriScreen() {
 
         <View style={{ gap: 7 }}>
           <Text style={{ color: colors.primary, fontSize: 10, fontWeight: "900", letterSpacing: 1.8 }}>MUSLIMAPP · CALENDRIER</Text>
-          <Text style={{ color: colors.text, fontSize: 31, fontWeight: "900", letterSpacing: -0.8 }}>Calendrier hégirien</Text>
-          <Text style={{ color: colors.muted, fontSize: 14, lineHeight: 22 }}>Retrouve les dates, les mois islamiques et les repères importants de l’année.</Text>
+          <Text style={{ color: colors.text, fontSize: 31, fontWeight: "900", letterSpacing: -0.8 }}>Calendrier islamique</Text>
+          <Text style={{ color: colors.muted, fontSize: 14, lineHeight: 22 }}>Explore les dates grégoriennes, leur correspondance hégirienne et les repères importants de l’année.</Text>
         </View>
 
         <View style={{ backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: 24, padding: 19, gap: 10, overflow: "hidden" }}>
@@ -389,7 +397,7 @@ export default function HijriScreen() {
                 <Pressable
                   key={key}
                   accessibilityRole="button"
-                  accessibilityLabel={`${longDateLabel(date)}${hijri ? `, ${hijri.day} ${hijri.monthName}` : ""}`}
+                  accessibilityLabel={`${longDateLabel(date)}${hijri ? `, ${hijri.day} ${hijri.monthName}` : ""}${hasEvent ? ", événement islamique" : ""}`}
                   accessibilityState={{ selected }}
                   onPress={() => chooseDate(key)}
                   style={({ pressed }) => ({
