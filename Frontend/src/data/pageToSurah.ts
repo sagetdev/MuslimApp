@@ -2,7 +2,7 @@
 
 // Pour chaque sourate (1..114), la page du mushaf (1..604) où elle commence.
 // Source : mushaf de Médine (604 pages).
-const SURAH_START_PAGES: number[] = [
+export const SURAH_START_PAGES: number[] = [
   1, 2, 50, 77, 106, 128, 151, 177, 187, 208,
   221, 235, 249, 255, 262, 267, 282, 293, 305, 312,
   322, 332, 342, 350, 359, 367, 377, 385, 396, 404,

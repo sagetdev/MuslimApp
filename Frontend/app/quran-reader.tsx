@@ -19,6 +19,7 @@ import { apiFetch } from "../src/lib/api";
 import { getBundledSurah, getCachedSurah, setCachedSurah } from "../src/lib/quranTextOffline";
 import { getProgress, loadProgress, saveProgress } from "../src/lib/quranProgress";
 import { useAppTheme } from "../src/theme/ThemeProvider";
+import { verseToPage, pageToVerse } from "../src/lib/verseToPage";
 
 type Surah = {
   number?: number;
@@ -145,9 +146,12 @@ function extractVerses(surah: Surah): Record<string, unknown>[] {
 
 export default function QuranReaderScreen() {
   const { colors } = useAppTheme();
-  const params = useLocalSearchParams<{ surah?: string | string[] }>();
+  const params = useLocalSearchParams<{ surah?: string | string[]; verse?: string | string[] }>();
   const router = useRouter();
   const initial = Array.isArray(params.surah) ? params.surah[0] : params.surah;
+  const verseParam = Array.isArray(params.verse) ? params.verse[0] : params.verse;
+  const parsedVerse = Number(verseParam);
+  const initialVerse = Number.isInteger(parsedVerse) && parsedVerse >= 1 ? parsedVerse : 1;
   const [input, setInput] = useState(initial ?? "1");
   const [surahSearch, setSurahSearch] = useState("");
   const [showJuzList, setShowJuzList] = useState(false);
@@ -217,7 +221,9 @@ export default function QuranReaderScreen() {
       setShowJuzList(false);
       currentSurah.current = number;
       pendingVerse.current = startVerse;
-      saveProgress({ surah: number, verse: startVerse });
+      lastSavedVerse.current = startVerse;
+      const page = verseToPage(number, startVerse);
+      saveProgress({ surah: number, verse: startVerse, page });
     } catch (e) {
       // Garde une trace exploitable même si l'erreur est interceptée par l'écran.
       console.error("[QuranReader] Échec du chargement de la sourate :", e);
@@ -238,16 +244,23 @@ export default function QuranReaderScreen() {
     void (async () => {
       const saved = await loadProgress();
       if (!active) return;
-      if (!initial && saved.mode === "pages") setReadingMode("pages");
+
+      // Si on était en mode Mushaf ET qu'aucune sourate n'est demandée explicitement,
+      // on n'a pas besoin de charger la sourate en arrière-plan.
+      if (!initial && saved.mode === "pages") {
+        setReadingMode("pages");
+        setRestored(true);
+        return;
+      }
+
       setRestored(true);
-      // Une sourate demandée explicitement (paramètre de route) a priorité sur la sauvegarde.
-      if (initial) await loadSurah(Number(initial));
+      if (initial) await loadSurah(Number(initial), initialVerse);
       else await loadSurah(saved.surah, saved.verse);
     })();
     return () => {
       active = false;
     };
-  }, [initial, loadSurah]);
+  }, [initial, initialVerse, loadSurah]);
 
   // Retour à la position sauvegardée une fois les versets affichés.
   useEffect(() => {
@@ -263,6 +276,8 @@ export default function QuranReaderScreen() {
     }, 150);
   }, [verses, loading, readingMode]);
 
+  const lastSavedVerse = useRef(1);
+
   const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (ignoreScroll.current || pendingVerse.current !== null) return;
     const y = event.nativeEvent.contentOffset.y - cardY.current + 80;
@@ -270,7 +285,13 @@ export default function QuranReaderScreen() {
     for (const [key, value] of Object.entries(verseY.current)) {
       if (value <= y && Number(key) > current) current = Number(key);
     }
-    saveProgress({ surah: currentSurah.current, verse: current });
+    // Évite les sauvegardes redondantes
+    if (current === lastSavedVerse.current) return;
+    lastSavedVerse.current = current;
+
+    const surahNum = currentSurah.current;
+    const page = verseToPage(surahNum, current);
+    saveProgress({ surah: surahNum, verse: current, page });
   }, []);
 
   const styles = useMemo(
@@ -305,13 +326,23 @@ export default function QuranReaderScreen() {
   };
 
   const changeMode = (mode: "verses" | "pages") => {
-    if (mode === "verses") {
-      pendingVerse.current = getProgress().verse;
-      ignoreScroll.current = true;
-    }
-    setReadingMode(mode);
-    saveProgress({ mode });
-  };
+  if (mode === readingMode) return;
+
+  if (mode === "pages") {
+    const p = getProgress();
+    const page = verseToPage(p.surah, p.verse);
+    saveProgress({ mode: "pages", page });
+    setReadingMode("pages");
+  } else {
+    const p = getProgress();
+    const { surah, verse } = pageToVerse(p.page);   // ✅ premier verset de la page
+    pendingVerse.current = verse;
+    ignoreScroll.current = true;
+    saveProgress({ mode: "verses", surah, verse });
+    setReadingMode("verses");
+    void loadSurah(surah, verse);                    // ✅ charge le premier verset
+  }
+};
 
   // Appel via une fonction pour éviter que TypeScript ne réduise readingMode à "verses"
   // dans le JSX qui suit et signale à tort les comparaisons utilisées pour les boutons.
@@ -332,7 +363,6 @@ export default function QuranReaderScreen() {
       <QuranPage
         initialPage={getProgress().page}
         offline
-        onPageChange={(page) => saveProgress({ mode: "pages", page })}
         onClose={() => changeMode("verses")}
       />
     );
@@ -353,29 +383,122 @@ export default function QuranReaderScreen() {
           alignSelf: "center",
         }}
       >
-        <BackButton />
+        <View
+  style={{
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  }}
+>
+  {/* Bouton retour à gauche */}
+  <BackButton />
 
-        {showFavoritesMenu ? (
-          <View style={[styles.card, { gap: 8, padding: 12 }]}>
-            <Text style={[styles.text, { fontWeight: "800", fontSize: 15 }]}>Sourates favorites</Text>
-            {favorites.length === 0 ? (
-              <Text style={[styles.muted, { fontSize: 13, lineHeight: 19 }]}>Aucune sourate favorite. Utilise le signet dans la fenêtre de la sourate pour en enregistrer une.</Text>
-            ) : favorites.map((number) => {
-              const item = SURAHS[number - 1];
-              if (!item) return null;
-              return (
-                <View key={number} style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 5, paddingHorizontal: 8, borderRadius: 10, backgroundColor: Number(input) === number ? colors.surfaceAlt : "transparent" }}>
-                  <Pressable accessibilityRole="button" accessibilityLabel={"Ouvrir la sourate favorite " + item.name} onPress={() => { setShowFavoritesMenu(false); void loadSurah(number); }} style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 4 }}>
-                    <Text style={[styles.muted, { width: 25, fontSize: 12 }]}>{number}</Text>
-                    <View style={{ flex: 1, gap: 2 }}><Text style={[styles.text, { fontWeight: "700" }]}>{item.name}</Text><Text style={[styles.muted, { fontSize: 11 }]}>{item.verses} versets</Text></View>
-                    <Text style={[styles.text, { fontSize: 19 }]}>{item.arabic}</Text>
-                  </Pressable>
-                  <Pressable accessibilityRole="button" accessibilityLabel={"Retirer " + item.name + " des favoris"} onPress={() => void toggleFavoriteSurah(number)} style={{ padding: 5 }}><Ionicons name="bookmark" size={17} color={colors.primary} /></Pressable>
+  {/* Icône favoris à droite */}
+  <Pressable
+    accessibilityRole="button"
+    accessibilityLabel="Sourates favorites"
+    accessibilityState={{ expanded: showFavoritesMenu }}
+    onPress={() => setShowFavoritesMenu((v) => !v)}
+    hitSlop={10}
+    style={{
+      padding: 8,
+      borderRadius: 12,
+      backgroundColor: showFavoritesMenu ? colors.primary : colors.surfaceAlt,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+    }}
+  >
+    <Ionicons
+      name={showFavoritesMenu ? "bookmarks" : "bookmarks-outline"}
+      size={22}
+      color={showFavoritesMenu ? colors.primaryText : colors.primary}
+    />
+    {favorites.length > 0 ? (
+      <Text
+        style={{
+          color: showFavoritesMenu ? colors.primaryText : colors.primary,
+          fontWeight: "800",
+          fontSize: 13,
+        }}
+      >
+        {favorites.length}
+      </Text>
+    ) : null}
+  </Pressable>
+</View>
+
+  {/* Menu déroulant des favoris (toggle) */}
+  {showFavoritesMenu ? (
+    <View style={[styles.card, { gap: 8, padding: 12 }]}>
+      {favorites.length === 0 ? (
+        <Text style={[styles.muted, { fontSize: 13, lineHeight: 19 }]}>
+          Aucune sourate favorite. Utilise le signet dans la fenêtre de la sourate pour en enregistrer une.
+        </Text>
+      ) : (
+        favorites.map((number) => {
+          const item = SURAHS[number - 1];
+          if (!item) return null;
+          const isActive = Number(input) === number;
+          return (
+            <View
+              key={number}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 10,
+                paddingVertical: 5,
+                paddingHorizontal: 8,
+                borderRadius: 10,
+                backgroundColor: isActive ? colors.surfaceAlt : "transparent",
+              }}
+            >
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={"Ouvrir la sourate favorite " + item.name}
+                onPress={() => {
+                  setShowFavoritesMenu(false);
+                  void loadSurah(number);
+                }}
+                style={{
+                  flex: 1,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 10,
+                  paddingVertical: 4,
+                }}
+              >
+                <Text style={[styles.muted, { width: 25, fontSize: 12 }]}>
+                  {number}
+                </Text>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={[styles.text, { fontWeight: "700" }]}>
+                    {item.name}
+                  </Text>
+                  <Text style={[styles.muted, { fontSize: 11 }]}>
+                    {item.verses} versets
+                  </Text>
                 </View>
-              );
-            })}
-          </View>
-        ) : null}
+                <Text style={[styles.text, { fontSize: 19 }]}>{item.arabic}</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={"Retirer " + item.name + " des favoris"}
+                onPress={() => void toggleFavoriteSurah(number)}
+                style={{ padding: 5 }}
+              >
+                <Ionicons name="bookmark" size={17} color={colors.primary} />
+              </Pressable>
+            </View>
+          );
+        })
+      )}
+    </View>
+  ) : null}
+
+        
 
         <View style={[styles.card, { gap: 10 }]}>
           <Text style={[styles.text, { fontWeight: "800", fontSize: 16 }]}>Mode de lecture</Text>

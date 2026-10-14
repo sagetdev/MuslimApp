@@ -1,11 +1,10 @@
-
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import * as Location from "expo-location";
 import { apiFetch } from "../../src/lib/api";
 import { loadPrayerPrefs } from "../../src/lib/prayerPrefs";
+import { loadProgress } from "../../src/lib/quranProgress";
 import {
   Pressable,
   ScrollView,
@@ -15,8 +14,6 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAppTheme } from "../../src/theme/ThemeProvider";
 import createHomeStyles from "@/src/styles/home.styles";
-
-const LAST_READ_KEY = "muslimapp:quran:last-read:v1";
 
 const SURAH_NAMES = [
   "Al-Fatiha", "Al-Baqara", "Ali 'Imran", "An-Nisa", "Al-Ma'idah", "Al-An'am", "Al-A'raf", "Al-Anfal", "At-Tawbah", "Yunus",
@@ -33,7 +30,7 @@ const SURAH_NAMES = [
   "Al-Masad", "Al-Ikhlas", "Al-Falaq", "An-Nas",
 ] as const;
 
-type LastRead = { surah: number; verse: number; updatedAt?: string };
+type LastRead = { surah: number; verse: number };
 
 const features = [
   {
@@ -152,35 +149,20 @@ export default function DashboardScreen() {
   const [hijriDate, setHijriDate] = useState<string | null>(null);
   const [lastRead, setLastRead] = useState<LastRead | null>(null);
 
-  useEffect(() => {
-    let mounted = true;
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
 
-    async function loadLastRead() {
-      try {
-        const raw = await AsyncStorage.getItem(LAST_READ_KEY);
-        if (!raw) return;
+      // Lire la même progression que le lecteur, et la rafraîchir à chaque retour à l'accueil.
+      void loadProgress().then((saved) => {
+        if (active) setLastRead({ surah: saved.surah, verse: saved.verse });
+      });
 
-        const saved: unknown = JSON.parse(raw);
-        if (!saved || typeof saved !== "object") return;
-        const value = saved as Partial<LastRead>;
-        if (
-          Number.isInteger(value.surah) && value.surah! >= 1 && value.surah! <= 114 &&
-          Number.isInteger(value.verse) && value.verse! >= 1
-        ) {
-          if (mounted) setLastRead({
-            surah: value.surah!,
-            verse: value.verse!,
-            ...(typeof value.updatedAt === "string" ? { updatedAt: value.updatedAt } : {}),
-          });
-        }
-      } catch {
-        // Un cache absent ou invalide ne doit pas bloquer le tableau de bord.
-      }
-    }
-
-    void loadLastRead();
-    return () => { mounted = false; };
-  }, []);
+      return () => {
+        active = false;
+      };
+    }, [])
+  );
 
   useEffect(() => {
     let mounted = true;
@@ -404,7 +386,7 @@ export default function DashboardScreen() {
           </View>
 
           <Pressable
-            onPress={() => router.push(lastRead ? { pathname: "/quran-reader", params: { surah: String(lastRead.surah) } } : "/quran-reader")}
+            onPress={() => router.push(lastRead ? { pathname: "/quran-reader", params: { surah: String(lastRead.surah), verse: String(lastRead.verse) } } : "/quran-reader")}
             style={({ pressed }) => [
               styles.quranCard,
               pressed && styles.pressed,

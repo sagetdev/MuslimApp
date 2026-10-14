@@ -17,6 +17,8 @@ import { getSurahForPage, TOTAL_PAGES } from "../src/data/pageToSurah";
 import { apiFetch } from "../src/lib/api";
 import createQuranStyles from "../src/styles/quran.styles";
 import { useAppTheme } from "../src/theme/ThemeProvider";
+import { pageToVerse } from "../src/lib/verseToPage";
+import { saveProgress } from "../src/lib/quranProgress";
 
 type Word = { code: string | null; text: string | null; kind: "word" | "end"; page: number };
 type Line = { number: number; words: Word[] };
@@ -280,13 +282,20 @@ export default function QuranPage({ initialPage = 1, onClose, offline = false, o
   }, []);
 
   useEffect(() => {
-    if (settled.current) onPageChange?.(currentPage);
-  }, [currentPage]);
+    if (settled.current) {
+      onPageChange?.(currentPage);
+      const { surah, verse } = pageToVerse(currentPage);
+      saveProgress({ mode: "pages", page: currentPage, surah, verse });
+    }
+  }, [currentPage, onPageChange]);
 
   const onViewableItemsChanged = useCallback(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
       if (viewableItems.length > 0 && viewableItems[0].item) {
-        setCurrentPage(viewableItems[0].item as number);
+        const page = viewableItems[0].item as number;
+        setCurrentPage(page);
+        const { surah, verse } = pageToVerse(page);
+        saveProgress({ mode: "pages", page, surah, verse });
       }
     },
     []
@@ -307,6 +316,8 @@ export default function QuranPage({ initialPage = 1, onClose, offline = false, o
     if (flatListRef.current && index >= 0 && index < TOTAL_PAGES) {
       flatListRef.current.scrollToIndex({ index, animated: false });
     }
+    const { surah, verse } = pageToVerse(page);
+    saveProgress({ mode: "pages", page, surah, verse });
   }, []);
 
   // Numéro de la sourate actuelle, calculé à partir de la page courante
