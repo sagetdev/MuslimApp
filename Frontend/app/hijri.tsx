@@ -67,6 +67,17 @@ function parseDateKey(value: string): Date {
   return new Date(year, month - 1, day, 12, 0, 0, 0);
 }
 
+function isValidDateKey(value: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return false;
+  const [, yearText, monthText, dayText] = match;
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const date = new Date(year, month - 1, day, 12, 0, 0, 0);
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+}
+
 function unwrap(value: unknown): unknown {
   let current = value;
   for (let i = 0; i < 4; i += 1) {
@@ -168,7 +179,7 @@ function normalizeEvent(item: RecordValue, index: number): IslamicEvent {
         ? `${hijriDay} ${HIJRI_MONTHS[hijriMonth - 1] ?? `mois ${hijriMonth}`}`
         : "Date variable selon l’observation lunaire"
     ),
-    gregorianDate: dateMatch?.[1],
+    gregorianDate: dateMatch?.[1] && isValidDateKey(dateMatch[1]) ? dateMatch[1] : undefined,
     hijriDay: Number.isFinite(hijriDay) && hijriDay >= 1 && hijriDay <= 30 ? hijriDay : undefined,
     hijriMonth: Number.isFinite(hijriMonth) && hijriMonth >= 1 && hijriMonth <= 12 ? hijriMonth : undefined,
     description: asText(item.description ?? item.summary ?? item.details),
