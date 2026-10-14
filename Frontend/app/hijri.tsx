@@ -216,15 +216,26 @@ export default function HijriScreen() {
     setLoadingEvents(true);
     setEventsError("");
     try {
-      const [eventsResponse, monthsResponse] = await Promise.all([
+      const [eventsResult, monthsResult] = await Promise.allSettled([
         apiFetch<unknown>("/islamic-events", { params: { timezone } }),
         apiFetch<unknown>("/islamic-months"),
       ]);
-      const eventRecords = asRecords(eventsResponse, ["events", "items", "results", "islamicEvents"]);
-      setEvents(eventRecords.map(normalizeEvent));
-      const monthRecords = asRecords(monthsResponse, ["months", "items", "results", "islamicMonths"]);
-      const names = monthRecords.map((item) => asText(item.name ?? item.title ?? item.english ?? item.month)).filter(Boolean);
-      if (names.length) setIslamicMonths(names);
+
+      if (eventsResult.status === "fulfilled") {
+        const eventRecords = asRecords(eventsResult.value, ["events", "items", "results", "islamicEvents"]);
+        setEvents(eventRecords.map(normalizeEvent));
+      } else {
+        setEvents([]);
+        setEventsError(eventsResult.reason instanceof Error
+          ? eventsResult.reason.message
+          : "Les événements n’ont pas pu être chargés.");
+      }
+
+      if (monthsResult.status === "fulfilled") {
+        const monthRecords = asRecords(monthsResult.value, ["months", "items", "results", "islamicMonths"]);
+        const names = monthRecords.map((item) => asText(item.name ?? item.title ?? item.english ?? item.month)).filter(Boolean);
+        if (names.length) setIslamicMonths(names);
+      }
     } catch (error) {
       setEventsError(error instanceof Error ? error.message : "Les événements n’ont pas pu être chargés.");
     } finally {
