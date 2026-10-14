@@ -31,6 +31,7 @@ const ALL_PAGES = Array.from({ length: TOTAL_PAGES }, (_, i) => i + 1);
 type Props = {
   initialPage?: number;
   onClose?: () => void;
+  onPageChange?: (page: number) => void;
   offline?: boolean;
 };
 
@@ -261,13 +262,26 @@ function MushafPageItem({
   );
 }
 
-export default function QuranPage({ initialPage = 1, onClose, offline = false }: Props) {
+export default function QuranPage({ initialPage = 1, onClose, offline = false, onPageChange }: Props) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createQuranStyles(colors), [colors]);
   const { width } = useWindowDimensions();
   const [currentPage, setCurrentPage] = useState(initialPage);
 
   const flatListRef = useRef<FlatList>(null);
+
+  // Ignore les événements de visibilité du tout début (avant le scroll vers la page initiale).
+  const settled = useRef(false);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      settled.current = true;
+    }, 600);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (settled.current) onPageChange?.(currentPage);
+  }, [currentPage]);
 
   const onViewableItemsChanged = useCallback(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {

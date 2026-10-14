@@ -1,19 +1,12 @@
 import BackButton from "../components/BackButton";
 import { Ionicons } from "@expo/vector-icons";
-import * as Location from "expo-location";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { apiFetch } from "../src/lib/api";
 import { useAppTheme } from "../src/theme/ThemeProvider";
-import {
-  DEFAULT_PRAYER_PREFS,
-  MADHABS,
-  PRAYER_METHODS,
-  loadPrayerPrefs,
-  savePrayerPrefs,
-  type PrayerPrefs,
-} from "../src/lib/prayerPrefs";
+import { prefetchQibla, qiblaCache, subscribeQibla } from "../src/lib/qiblaCache";
+import { PRAYER_NAMES, computePrayerTimes, formatHHMM } from "../src/lib/prayerCache";
+import { loadPrayerPrefs, type PrayerPrefs } from "../src/lib/prayerPrefs";
 
 const prayers = [
   { name: "Fajr", icon: "cloudy-night-outline" as const },
@@ -23,44 +16,17 @@ const prayers = [
   { name: "Isha", icon: "moon-outline" as const },
 ];
 
-
-function findTimes(value: unknown): Record<string, string> {
-  const out: Record<string, string> = {};
-
-  const visit = (node: unknown) => {
-    if (!node || typeof node !== "object") return;
-    if (Array.isArray(node)) {
-      node.forEach(visit);
-      return;
-    }
-    const obj = node as Record<string, unknown>;
-    for (const p of prayers) {
-      const v = obj[p.name];
-      if (typeof v === "string" || typeof v === "number") {
-        const m = String(v).match(/\d{1,2}:\d{2}/);
-        if (m) out[p.name] = m[0];
-      }
-    }
-    Object.values(obj).forEach(visit);
-  };
-
-  visit(value);
-  return out;
-}
+const NO_LOCATION =
+  "La localisation est nécessaire pour calculer les horaires de ta position. Autorise-la dans les réglages de ton appareil.";
 
 export default function PrayerScreen() {
   const { colors } = useAppTheme();
-  const [times, setTimes] = useState<Record<string, string>>({});
   const [prefs, setPrefs] = useState<PrayerPrefs | null>(null);
+  const [coords, setCoords] = useState(qiblaCache.coords);
   const [status, setStatus] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(qiblaCache.coords === null);
   const [now, setNow] = useState(Date.now());
-  const [nextPrayer, setNextPrayer] = useState<{ name: string; time: Date } | null>(null);
 
-  const method = prefs?.method ?? DEFAULT_PRAYER_PREFS.method;
-  const madhab = prefs?.madhab ?? DEFAULT_PRAYER_PREFS.madhab;
-
-  // Les préférences sont lues une seule fois, avant le premier calcul des horaires.
   useEffect(() => {
     let active = true;
     void loadPrayerPrefs().then((loaded) => {
@@ -71,72 +37,61 @@ export default function PrayerScreen() {
     };
   }, []);
 
-  const load = useCallback(async () => {
-    if (!prefs) return;
-    setLoading(true);
-    setStatus("");
-    try {
-      let perm = await Location.getForegroundPermissionsAsync();
-      if (perm.status !== "granted") {
-        perm = await Location.requestForegroundPermissionsAsync();
-      }
-      if (perm.status !== "granted") {
-        throw new Error("La localisation est nécessaire pour calculer les horaires de ta position.");
-      }
-      const pos = await Location.getCurrentPositionAsync({});
-      const result = await apiFetch<unknown>("/prayer-times", {
-        params: {
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
-          method: prefs.method,
-          madhab: prefs.madhab,
-          highLatitudeRule: "seventhofthenight",
-        },
-      });
-      const found = findTimes(result);
-      if (Object.keys(found).length === 0) {
-        throw new Error("Aucun horaire reçu pour ta position. Réessaie dans un instant.");
-      }
-      setTimes(found);
-    } catch (e) {
-      setStatus(e instanceof Error ? e.message : "Impossible de charger les horaires.");
-    } finally {
-      setLoading(false);
-    }
-  }, [prefs]);
-
+  // Même cache de position que la Qibla : dès qu'une position arrive, les horaires se recalculent.
   useEffect(() => {
-    void load();
-  }, [load]);
+    let active = true;
+    const unsubscribe = subscribeQibla(() => {
+      if (!active) return;
+      setCoords(qiblaCache.coords);
+      setStatus("");
+      setLoading(false);
+    });
+
+    void prefetchQibla().then(() => {
+      if (!active) return;
+      if (qiblaCache.coords === null) setStatus(NO_LOCATION);
+      setLoading(false);
+    });
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  useEffect(() => {
-    const today = new Date(now);
-    const candidates = prayers
-      .flatMap((p) => {
-        const raw = times[p.name];
-        if (!raw) return [];
-        const [h, m] = raw.split(":").map(Number);
-        const d = new Date(today);
-        d.setHours(h, m, 0, 0);
-        if (d.getTime() <= now) d.setDate(d.getDate() + 1);
-        return [{ name: p.name, time: d }];
-      })
-      .sort((a, b) => a.time.getTime() - b.time.getTime());
-
-    setNextPrayer(candidates[0] ?? null);
-  }, [times, now]);
-
-  const save = (m: string, md: PrayerPrefs["madhab"]) => {
-    const next = { method: m, madhab: md };
-    setPrefs(next);
-    void savePrayerPrefs(next);
+  const refresh = () => {
+    setLoading(true);
+    setStatus("");
+    void prefetchQibla(true).then(() => {
+      if (qiblaCache.coords === null) setStatus(NO_LOCATION);
+      setLoading(false);
+    });
   };
+
+  // Recalculé uniquement si la position, la méthode ou le jour changent.
+  const dayKey = new Date(now).toDateString();
+  const schedule = useMemo(() => {
+    if (!coords || !prefs) return null;
+    const today = new Date();
+    return {
+      today: computePrayerTimes(coords, prefs, today),
+      tomorrow: computePrayerTimes(coords, prefs, new Date(today.getTime() + 24 * 60 * 60 * 1000)),
+    };
+  }, [coords, prefs, dayKey]);
+
+  const nextPrayer = useMemo(() => {
+    if (!schedule) return null;
+    for (const name of PRAYER_NAMES) {
+      const time = schedule.today[name];
+      if (time.getTime() > now) return { name, time };
+    }
+    return { name: "Fajr", time: schedule.tomorrow.Fajr };
+  }, [schedule, now]);
 
   const countdown = nextPrayer
     ? (() => {
@@ -193,7 +148,7 @@ export default function PrayerScreen() {
           </Text>
           <Text style={{ color: colors.muted, fontSize: 12 }}>
             {nextPrayer
-              ? nextPrayer.time.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+              ? formatHHMM(nextPrayer.time)
               : "Active la localisation pour commencer"}
           </Text>
         </View>
@@ -225,7 +180,7 @@ export default function PrayerScreen() {
                 {p.name}
               </Text>
               <Text style={{ color: colors.text, fontSize: 17, fontWeight: "800", fontVariant: ["tabular-nums"] }}>
-                {times[p.name] ?? "--:--"}
+                {schedule ? formatHHMM(schedule.today[p.name as keyof typeof schedule.today]) : "--:--"}
               </Text>
             </View>
           ))}
@@ -234,79 +189,20 @@ export default function PrayerScreen() {
           {status ? <Text style={{ color: colors.danger, lineHeight: 20 }}>{status}</Text> : null}
 
           <Pressable
-            onPress={() => void load()}
+            onPress={refresh}
+            disabled={loading}
             style={{
               backgroundColor: colors.primary,
               borderRadius: 14,
               padding: 13,
               alignItems: "center",
+              opacity: loading ? 0.6 : 1,
             }}
           >
             <Text style={{ color: colors.primaryText, fontWeight: "800" }}>
-              Actualiser les horaires
+              Actualiser ma position
             </Text>
           </Pressable>
-        </View>
-
-        <View
-          style={{
-            backgroundColor: colors.surface,
-            borderColor: colors.border,
-            borderWidth: 1,
-            borderRadius: 22,
-            padding: 17,
-            gap: 15,
-          }}
-        >
-          <Text style={{ color: colors.text, fontSize: 18, fontWeight: "800" }}>
-            Paramètres de calcul
-          </Text>
-
-          <Text style={{ color: colors.muted, fontSize: 12 }}>Méthode</Text>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            {PRAYER_METHODS.map((m) => (
-              <Pressable
-                key={m.value}
-                onPress={() => save(m.value, madhab)}
-                style={{
-                  padding: 10,
-                  borderRadius: 12,
-                  backgroundColor: method === m.value ? colors.primary : colors.surfaceAlt,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                }}
-              >
-                <Text
-                  style={{
-                    color: method === m.value ? colors.primaryText : colors.text,
-                    fontSize: 12,
-                    fontWeight: "700",
-                  }}
-                >
-                  {m.label}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-
-          <Text style={{ color: colors.muted, fontSize: 12 }}>Calcul de Asr</Text>
-          <View style={{ flexDirection: "row", gap: 8 }}>
-            {MADHABS.map((m) => (
-              <Pressable
-                key={m.value}
-                onPress={() => save(method, m.value)}
-                style={{
-                  padding: 11,
-                  borderRadius: 12,
-                  backgroundColor: madhab === m.value ? colors.primary : colors.surfaceAlt,
-                }}
-              >
-                <Text style={{ color: madhab === m.value ? colors.primaryText : colors.text, fontWeight: "700" }}>
-                  {m.label}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
         </View>
       </ScrollView>
     </SafeAreaView>

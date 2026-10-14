@@ -424,7 +424,6 @@ function HadithDetail({ item, onClose, onPrevious, onNext }: DetailBaseProps) {
           {referenceRows.map((row) => <InfoBlock key={row.label} icon={row.icon} label={row.label} text={row.text} />)}
         </View>
       ) : null}
-      <ExtraDetails entries={h.extras} />
       {!h.arabic && !h.meaning ? (
         <Text style={{ color: colors.muted, lineHeight: 22 }}>Aucun texte n’est fourni pour ce hadith.</Text>
       ) : null}

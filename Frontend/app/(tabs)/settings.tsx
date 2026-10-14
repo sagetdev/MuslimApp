@@ -1,16 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import {
-  DEFAULT_PRAYER_PREFS,
-  MADHABS,
-  PRAYER_METHODS,
-  loadPrayerPrefs,
-  savePrayerPrefs,
-  type PrayerPrefs,
-} from "../../src/lib/prayerPrefs";
 import { useAppTheme, type ThemePreference } from "../../src/theme/ThemeProvider";
 
 const THEME_OPTIONS: { label: string; value: ThemePreference; icon: keyof typeof Ionicons.glyphMap }[] = [
@@ -22,22 +13,6 @@ const THEME_OPTIONS: { label: string; value: ThemePreference; icon: keyof typeof
 export default function SettingsScreen() {
   const { colors, preference, setPreference } = useAppTheme();
   const router = useRouter();
-  const [prefs, setPrefs] = useState<PrayerPrefs>(DEFAULT_PRAYER_PREFS);
-
-  useEffect(() => {
-    let active = true;
-    void loadPrayerPrefs().then((loaded) => {
-      if (active) setPrefs(loaded);
-    });
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  function updatePrefs(next: PrayerPrefs) {
-    setPrefs(next);
-    void savePrayerPrefs(next);
-  }
 
   const card = {
     backgroundColor: colors.surface,
@@ -113,24 +88,6 @@ export default function SettingsScreen() {
             <View accessibilityRole="radiogroup" style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
               {THEME_OPTIONS.map((option) => (
                 <Chip key={option.value} label={option.label} selected={preference === option.value} onPress={() => setPreference(option.value)} />
-              ))}
-            </View>
-          </View>
-        </View>
-
-        <View style={{ gap: 10 }}>
-          <Text style={sectionTitle}>Horaires de prière</Text>
-          <View style={{ ...card, padding: 14, gap: 12 }}>
-            <Text style={{ color: colors.muted, fontSize: 12 }}>Méthode de calcul</Text>
-            <View accessibilityRole="radiogroup" style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-              {PRAYER_METHODS.map((method) => (
-                <Chip key={method.value} label={method.label} selected={prefs.method === method.value} onPress={() => updatePrefs({ ...prefs, method: method.value })} />
-              ))}
-            </View>
-            <Text style={{ color: colors.muted, fontSize: 12 }}>Calcul de Asr</Text>
-            <View accessibilityRole="radiogroup" style={{ flexDirection: "row", gap: 8 }}>
-              {MADHABS.map((madhab) => (
-                <Chip key={madhab.value} label={madhab.label} selected={prefs.madhab === madhab.value} onPress={() => updatePrefs({ ...prefs, madhab: madhab.value })} />
               ))}
             </View>
           </View>

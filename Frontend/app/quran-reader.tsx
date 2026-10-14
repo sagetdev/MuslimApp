@@ -1,13 +1,23 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import BackButton from "../components/BackButton";
 import { Ionicons } from "@expo/vector-icons";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import QuranPage from "../components/QuranPage";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { apiFetch } from "../src/lib/api";
 import { getBundledSurah, getCachedSurah, setCachedSurah } from "../src/lib/quranTextOffline";
+import { getProgress, loadProgress, saveProgress } from "../src/lib/quranProgress";
 import { useAppTheme } from "../src/theme/ThemeProvider";
 
 type Surah = {
@@ -93,7 +103,6 @@ const JUZ_STARTS: Array<{ juz: number; surah: number; verse: number }> = [
 ];
 
 const FAVORITES_KEY = "muslimapp:quran:favorites:v1";
-const LAST_READ_KEY = "muslimapp:quran:last-read:v1";
 
 function normalizeSurahSearch(value: string): string {
   return value
@@ -152,6 +161,15 @@ export default function QuranReaderScreen() {
   const [fontSize, setFontSize] = useState(28);
   const [readingMode, setReadingMode] = useState<"verses" | "pages">("verses");
 
+  // Progression de lecture (sauvegardée sur l'appareil).
+  const [restored, setRestored] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
+  const cardY = useRef(0);
+  const verseY = useRef<Record<number, number>>({});
+  const currentSurah = useRef(1);
+  const pendingVerse = useRef<number | null>(null);
+  const ignoreScroll = useRef(true);
+
   useEffect(() => {
     void AsyncStorage.getItem(FAVORITES_KEY).then((raw) => {
       if (raw) {
@@ -168,6 +186,8 @@ export default function QuranReaderScreen() {
       setError("Entre un numéro de sourate entre 1 et 114.");
       return;
     }
+    verseY.current = {};
+    ignoreScroll.current = true;
     setLoading(true);
     setError("");
     try {
@@ -195,10 +215,9 @@ export default function QuranReaderScreen() {
       setInput(String(number));
       setSurahSearch("");
       setShowJuzList(false);
-      await AsyncStorage.setItem(
-        LAST_READ_KEY,
-        JSON.stringify({ surah: number, verse: startVerse, updatedAt: new Date().toISOString() })
-      );
+      currentSurah.current = number;
+      pendingVerse.current = startVerse;
+      saveProgress({ surah: number, verse: startVerse });
     } catch (e) {
       // Garde une trace exploitable même si l'erreur est interceptée par l'écran.
       console.error("[QuranReader] Échec du chargement de la sourate :", e);
@@ -215,9 +234,44 @@ export default function QuranReaderScreen() {
   }, []);
 
   useEffect(() => {
-    void loadSurah(Number(initial || 1));
+    let active = true;
+    void (async () => {
+      const saved = await loadProgress();
+      if (!active) return;
+      if (!initial && saved.mode === "pages") setReadingMode("pages");
+      setRestored(true);
+      // Une sourate demandée explicitement (paramètre de route) a priorité sur la sauvegarde.
+      if (initial) await loadSurah(Number(initial));
+      else await loadSurah(saved.surah, saved.verse);
+    })();
+    return () => {
+      active = false;
+    };
   }, [initial, loadSurah]);
 
+  // Retour à la position sauvegardée une fois les versets affichés.
+  useEffect(() => {
+    if (readingMode !== "verses" || loading || verses.length === 0 || pendingVerse.current === null) return;
+    const target = pendingVerse.current;
+    pendingVerse.current = null;
+    setTimeout(() => {
+      const y = target <= 1 ? 0 : cardY.current + (verseY.current[target] ?? 0) - 12;
+      scrollRef.current?.scrollTo({ y: Math.max(0, y), animated: false });
+      setTimeout(() => {
+        ignoreScroll.current = false;
+      }, 400);
+    }, 150);
+  }, [verses, loading, readingMode]);
+
+  const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (ignoreScroll.current || pendingVerse.current !== null) return;
+    const y = event.nativeEvent.contentOffset.y - cardY.current + 80;
+    let current = 1;
+    for (const [key, value] of Object.entries(verseY.current)) {
+      if (value <= y && Number(key) > current) current = Number(key);
+    }
+    saveProgress({ surah: currentSurah.current, verse: current });
+  }, []);
 
   const styles = useMemo(
     () => ({
@@ -250,16 +304,36 @@ export default function QuranReaderScreen() {
     await AsyncStorage.setItem(FAVORITES_KEY, JSON.stringify(next));
   };
 
+  const changeMode = (mode: "verses" | "pages") => {
+    if (mode === "verses") {
+      pendingVerse.current = getProgress().verse;
+      ignoreScroll.current = true;
+    }
+    setReadingMode(mode);
+    saveProgress({ mode });
+  };
+
   // Appel via une fonction pour éviter que TypeScript ne réduise readingMode à "verses"
   // dans le JSX qui suit et signale à tort les comparaisons utilisées pour les boutons.
   const isPagesMode = () => readingMode === "pages";
 
+  if (!restored) {
+    return (
+      <SafeAreaView style={styles.page} edges={["top", "left", "right"]}>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+          <ActivityIndicator color={colors.primary} size="large" />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   if (isPagesMode()) {
     return (
       <QuranPage
-        initialPage={1}
+        initialPage={getProgress().page}
         offline
-        onClose={() => setReadingMode("verses")}
+        onPageChange={(page) => saveProgress({ mode: "pages", page })}
+        onClose={() => changeMode("verses")}
       />
     );
   }
@@ -267,6 +341,9 @@ export default function QuranReaderScreen() {
   return (
     <SafeAreaView style={styles.page} edges={["top", "left", "right"]}>
       <ScrollView
+        ref={scrollRef}
+        onScroll={handleScroll}
+        scrollEventThrottle={200}
         contentContainerStyle={{
           padding: 20,
           paddingBottom: 40,
@@ -277,22 +354,6 @@ export default function QuranReaderScreen() {
         }}
       >
         <BackButton />
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-          <Pressable onPress={() => router.back()} accessibilityLabel="Retour" style={{ padding: 8 }}>
-            <Ionicons name="arrow-back" size={23} color={colors.text} />
-          </Pressable>
-          <View style={{ flex: 1, gap: 3 }}>
-            <Text style={{ color: colors.primary, fontSize: 10, fontWeight: "900", letterSpacing: 1.7 }}>
-              LECTURE DU CORAN
-            </Text>
-            <Text style={{ color: colors.text, fontSize: 28, fontWeight: "800" }}>
-              Le Saint Coran
-            </Text>
-          </View>
-          <Pressable accessibilityRole="button" accessibilityLabel={showFavoritesMenu ? "Fermer les sourates favorites" : "Ouvrir les sourates favorites"} accessibilityState={{ expanded: showFavoritesMenu }} onPress={() => setShowFavoritesMenu((value) => !value)} style={{ padding: 10, borderRadius: 12, backgroundColor: showFavoritesMenu ? colors.primary : colors.surfaceAlt }}>
-            <Ionicons name={showFavoritesMenu ? "close" : "bookmarks-outline"} size={23} color={showFavoritesMenu ? colors.primaryText : colors.primary} />
-          </Pressable>
-        </View>
 
         {showFavoritesMenu ? (
           <View style={[styles.card, { gap: 8, padding: 12 }]}>
@@ -320,7 +381,7 @@ export default function QuranReaderScreen() {
           <Text style={[styles.text, { fontWeight: "800", fontSize: 16 }]}>Mode de lecture</Text>
           <View style={{ flexDirection: "row", gap: 10 }}>
             <Pressable
-              onPress={() => setReadingMode("verses")}
+              onPress={() => changeMode("verses")}
               accessibilityRole="button"
               accessibilityState={{ selected: readingMode === "verses" }}
               style={[styles.action, { flex: 1, backgroundColor: readingMode === "verses" ? colors.primary : colors.surfaceAlt }]}
@@ -330,7 +391,7 @@ export default function QuranReaderScreen() {
               </Text>
             </Pressable>
             <Pressable
-              onPress={() => setReadingMode("pages")}
+              onPress={() => changeMode("pages")}
               accessibilityRole="button"
               accessibilityState={{ selected: readingMode === "pages" }}
               style={[styles.action, { flex: 1, backgroundColor: readingMode === "pages" ? colors.primary : colors.surfaceAlt }]}
@@ -359,12 +420,28 @@ export default function QuranReaderScreen() {
               <Ionicons name="chevron-back" size={23} color={colors.text} />
             </Pressable>
             <View style={{ flex: 1, gap: 4, alignItems: "center" }}>
-              <Text style={[styles.text, { fontSize: 18, fontWeight: "800", textAlign: "center" }]}>
-                {surah ? SURAHS[Number(input) - 1]?.name ?? `Sourate ${input}` : "Choisir une sourate"}
-              </Text>
-              <Pressable accessibilityRole="button" accessibilityLabel="Enregistrer ou retirer cette sourate des favoris" onPress={() => void toggleFavoriteSurah(Number(input))} style={{ alignSelf: "flex-end", marginRight: 18, marginTop: -2, marginBottom: -3, padding: 6, borderRadius: 10, backgroundColor: favorites.includes(Number(input)) ? colors.primary : colors.surfaceAlt }}>
-                <Ionicons name={favorites.includes(Number(input)) ? "bookmark" : "bookmark-outline"} size={19} color={favorites.includes(Number(input)) ? colors.primaryText : colors.primary} />
-              </Pressable>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                <Text style={[styles.text, { fontSize: 18, fontWeight: "800", textAlign: "center", flexShrink: 1 }]}>
+                  {surah ? SURAHS[Number(input) - 1]?.name ?? `Sourate ${input}` : "Choisir une sourate"}
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Enregistrer ou retirer cette sourate des favoris"
+                  onPress={() => void toggleFavoriteSurah(Number(input))}
+                  hitSlop={8}
+                  style={{
+                    padding: 6,
+                    borderRadius: 10,
+                    backgroundColor: favorites.includes(Number(input)) ? colors.primary : colors.surfaceAlt,
+                  }}
+                >
+                  <Ionicons
+                    name={favorites.includes(Number(input)) ? "bookmark" : "bookmark-outline"}
+                    size={18}
+                    color={favorites.includes(Number(input)) ? colors.primaryText : colors.primary}
+                  />
+                </Pressable>
+              </View>
               <Text style={[styles.text, { fontSize: 22, textAlign: "center" }]}>
                 {SURAHS[Number(input) - 1]?.arabic ?? ""}
               </Text>
@@ -478,7 +555,7 @@ export default function QuranReaderScreen() {
           ) : null}
         </View>
 
-        {readingMode === "verses" ? <View style={[styles.card, { gap: 14 }]}>
+        {readingMode === "verses" ? <View onLayout={(e) => { cardY.current = e.nativeEvent.layout.y; }} style={[styles.card, { gap: 14 }]}>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
             <Text style={[styles.text, { fontWeight: "800", fontSize: 16 }]}>Lecture</Text>
             <View style={{ flexDirection: "row", gap: 8 }}>
@@ -548,7 +625,11 @@ export default function QuranReaderScreen() {
                 firstText(verse, ["translation", "translationText", "text_translation", "english", "meaning"]) ||
                 firstText(translations, ["french", "sahih_international"]);
               return (
-                <View key={Number(input) + "-" + (index + 1)} style={{ paddingVertical: 15, paddingHorizontal: 12, gap: 13, borderRadius: 16 }}>
+                <View
+                  key={Number(input) + "-" + (index + 1)}
+                  onLayout={(e) => { verseY.current[index + 1] = e.nativeEvent.layout.y; }}
+                  style={{ paddingVertical: 15, paddingHorizontal: 12, gap: 13, borderRadius: 16 }}
+                >
                   <Text style={[styles.muted, { fontSize: 11, fontWeight: "800" }]}>VERSET {index + 1}</Text>
 
                   

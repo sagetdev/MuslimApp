@@ -1,93 +1,163 @@
 import { Ionicons } from "@expo/vector-icons";
 import BackButton from "../components/BackButton";
 import * as Location from "expo-location";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { Animated, Easing } from "react-native";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { apiFetch } from "../src/lib/api";
+import { normalizeDegrees, prefetchQibla, qiblaCache, subscribeQibla } from "../src/lib/qiblaCache";
 import { useAppTheme } from "../src/theme/ThemeProvider";
 
-function findBearing(value: unknown): number | null {
-  if (!value || typeof value !== "object") return null;
-  if (Array.isArray(value)) {
-    for (const x of value) {
-      const n = findBearing(x);
-      if (n !== null) return n;
-    }
-    return null;
-  }
-  const o = value as Record<string, unknown>;
-  for (const k of ["direction", "bearing", "qibla", "angle", "degrees"]) {
-    const v = o[k];
-    if (typeof v === "number" && Number.isFinite(v)) return ((v % 360) + 360) % 360;
-    if (typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v)))
-      return ((Number(v) % 360) + 360) % 360;
-  }
-  for (const v of Object.values(o)) {
-    const n = findBearing(v);
-    if (n !== null) return n;
-  }
-  return null;
-}
+const READY_STATUS = "Angle calculé. Oriente le haut de ton téléphone vers la flèche.";
+const LOADING_STATUS = "Récupération de ta position…";
 
 export default function QiblaScreen() {
   const { colors } = useAppTheme();
-  const [bearing, setBearing] = useState<number | null>(null);
+  const [bearing, setBearing] = useState<number | null>(qiblaCache.bearing);
   const [heading, setHeading] = useState<number | null>(null);
-  const [status, setStatus] = useState("Autorise la localisation pour déterminer la direction.");
-  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState(
+    qiblaCache.bearing === null ? LOADING_STATUS : READY_STATUS
+  );
+  const [loading, setLoading] = useState(qiblaCache.bearing === null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [usingMagneticHeading, setUsingMagneticHeading] = useState(false);
+  const animatedHeading = useRef(new Animated.Value(0)).current;
+  const continuousHeading = useRef(0);
+  const lastDisplayUpdate = useRef(0);
+  const filteredHeading = useRef<number | null>(null);
 
   useEffect(() => {
-    let subscription: Location.LocationSubscription | undefined;
     let active = true;
+    let subscription: Location.LocationSubscription | undefined;
+    let unsubscribe: (() => void) | undefined;
+    const refreshing = refreshKey > 0;
 
     void (async () => {
-      setLoading(true);
+      setHeading(null);
+      setUsingMagneticHeading(false);
+      continuousHeading.current = 0;
+      lastDisplayUpdate.current = 0;
+      filteredHeading.current = null;
+      animatedHeading.setValue(0);
+
+      setBearing(qiblaCache.bearing);
+      const needsLoading = qiblaCache.bearing === null || refreshing;
+      setLoading(needsLoading);
+      setStatus(needsLoading ? LOADING_STATUS : READY_STATUS);
+
       try {
-        const permission = await Location.requestForegroundPermissionsAsync();
+        let permission = await Location.getForegroundPermissionsAsync();
+        if (permission.status !== "granted") {
+          permission = await Location.requestForegroundPermissionsAsync();
+        }
         if (permission.status !== "granted") {
           throw new Error(
-            "Permission de localisation refusée. Tu peux la réactiver dans les réglages de ton appareil."
+            "La localisation est nécessaire pour calculer la Qibla. Autorise-la dans les réglages de ton appareil."
           );
         }
-        const pos = await Location.getCurrentPositionAsync({});
-        const result = await apiFetch<unknown>("/qibla", {
-          params: { lat: pos.coords.latitude, lng: pos.coords.longitude },
-        });
         if (!active) return;
 
-        const value = findBearing(result);
-        if (value === null) {
-          throw new Error("La réponse du service Qibla ne contient pas de direction reconnue.");
-        }
-        setBearing(value);
-        setStatus("Direction calculée. Oriente le haut de ton appareil vers la flèche.");
-
-        subscription = await Location.watchHeadingAsync((h) => {
-          if (active && Number.isFinite(h.trueHeading) && h.trueHeading >= 0) {
-            setHeading(h.trueHeading);
-          }
+        // Le calcul vient du cache : dès qu'une position est disponible, l'angle s'affiche.
+        unsubscribe = subscribeQibla((value) => {
+          if (!active) return;
+          setBearing(value);
+          setStatus(READY_STATUS);
+          setLoading(false);
         });
-      } catch (e) {
-        if (active) {
-          setStatus(e instanceof Error ? e.message : "Impossible de calculer la Qibla.");
+
+        void prefetchQibla(refreshing).then(() => {
+          if (!active) return;
+          if (qiblaCache.bearing === null) {
+            setStatus("Impossible de déterminer la direction de la Qibla.");
+          }
+          setLoading(false);
+        });
+
+        // La boussole démarre sans attendre le GPS.
+        try {
+          subscription = await Location.watchHeadingAsync((value) => {
+            if (!active) return;
+
+            const trueHeadingIsValid =
+              Number.isFinite(value.trueHeading) && value.trueHeading >= 0;
+            const magneticHeadingIsValid =
+              Number.isFinite(value.magHeading) && value.magHeading >= 0;
+
+            const rawHeading = trueHeadingIsValid
+              ? normalizeDegrees(value.trueHeading)
+              : magneticHeadingIsValid
+                ? normalizeDegrees(value.magHeading)
+                : null;
+
+            if (rawHeading === null) return;
+            setUsingMagneticHeading(!trueHeadingIsValid);
+
+            if (filteredHeading.current === null) {
+              filteredHeading.current = rawHeading;
+              continuousHeading.current = rawHeading;
+              setHeading(rawHeading);
+              animatedHeading.setValue(rawHeading);
+              return;
+            }
+
+            // Écart signé le plus court entre le cap filtré et le cap brut (évite le saut 359° → 0°).
+            let diff = rawHeading - filteredHeading.current;
+            if (diff > 180) diff -= 360;
+            if (diff < -180) diff += 360;
+
+            // Zone morte anti-tremblement.
+            if (Math.abs(diff) < 1) return;
+
+            // Filtre passe-bas : converge toujours vers le cap réel (plus de dérive d'angle).
+            const step = diff * (Math.abs(diff) > 20 ? 0.6 : 0.25);
+            filteredHeading.current = normalizeDegrees(filteredHeading.current + step);
+            continuousHeading.current += step;
+
+            animatedHeading.stopAnimation();
+            Animated.timing(animatedHeading, {
+              toValue: continuousHeading.current,
+              duration: 120,
+              easing: Easing.linear,
+              useNativeDriver: true,
+            }).start();
+
+            const now = Date.now();
+            if (now - lastDisplayUpdate.current >= 250) {
+              lastDisplayUpdate.current = now;
+              setHeading(Math.round(filteredHeading.current));
+            }
+          });
+        } catch {
+          if (active) {
+            setStatus(
+              "Angle calculé, mais la boussole de cet appareil n’est pas disponible. La direction reste affichée sans suivi en temps réel."
+            );
+          }
         }
-      } finally {
-        if (active) setLoading(false);
+      } catch (error) {
+        if (active) {
+          setStatus(
+            error instanceof Error
+              ? error.message
+              : "Impossible de déterminer la direction de la Qibla."
+          );
+          setLoading(false);
+        }
       }
     })();
 
     return () => {
       active = false;
+      unsubscribe?.();
       subscription?.remove();
     };
-  }, []);
-
-  const relative =
-    bearing !== null && heading !== null ? (bearing - heading + 360) % 360 : bearing ?? 0;
+  }, [refreshKey]);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={["top", "left", "right"]}>
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: colors.background }}
+      edges={["top", "left", "right"]}
+    >
       <ScrollView
         contentContainerStyle={{
           padding: 20,
@@ -108,7 +178,7 @@ export default function QiblaScreen() {
             Direction de la Qibla
           </Text>
           <Text style={{ color: colors.muted, lineHeight: 21 }}>
-            Une boussole guidée par la position et le cap de ton appareil.
+            L’angle est calculé depuis ta position GPS jusqu’à la Kaaba. La flèche suit l’orientation de ton téléphone.
           </Text>
         </View>
 
@@ -122,50 +192,136 @@ export default function QiblaScreen() {
             backgroundColor: colors.surface,
             alignItems: "center",
             justifyContent: "center",
-            marginTop: 12,
+            marginTop: 8,
+            overflow: "hidden",
           }}
         >
-          <View style={{ position: "absolute", top: 20 }}>
-            <Text style={{ color: colors.muted, fontWeight: "800" }}>N</Text>
-          </View>
-          <View
+          {/* The compass rose rotates against the phone heading. */}
+          <Animated.View
             style={{
-              width: 220,
-              height: 220,
-              borderRadius: 110,
+              position: "absolute",
+              width: 260,
+              height: 260,
+              borderRadius: 130,
+              borderWidth: 1,
+              borderColor: colors.border,
+              transform: [
+                {
+                  rotate: animatedHeading.interpolate({
+                    inputRange: [-3600, 3600],
+                    outputRange: ["3600deg", "-3600deg"],
+                    extrapolate: "extend",
+                  }),
+                },
+              ],
+            }}
+          >
+            <View style={{ position: "absolute", top: 10, alignSelf: "center", alignItems: "center" }}>
+              <Text style={{ color: colors.primary, fontSize: 17, fontWeight: "900" }}>N</Text>
+            </View>
+            <View style={{ position: "absolute", bottom: 10, alignSelf: "center", alignItems: "center" }}>
+              <Text style={{ color: colors.text, fontSize: 16, fontWeight: "800" }}>S</Text>
+            </View>
+            <View style={{ position: "absolute", right: 10, top: 0, bottom: 0, justifyContent: "center" }}>
+              <Text style={{ color: colors.text, fontSize: 16, fontWeight: "800" }}>E</Text>
+            </View>
+            <View style={{ position: "absolute", left: 10, top: 0, bottom: 0, justifyContent: "center" }}>
+              <Text style={{ color: colors.text, fontSize: 16, fontWeight: "800" }}>W</Text>
+            </View>
+            <View
+              style={{
+                position: "absolute",
+                top: 28,
+                bottom: 28,
+                left: 128.5,
+                width: 1,
+                backgroundColor: colors.border,
+              }}
+            />
+            <View
+              style={{
+                position: "absolute",
+                left: 28,
+                right: 28,
+                top: 128.5,
+                height: 1,
+                backgroundColor: colors.border,
+              }}
+            />
+            {/* Qibla pointer pivots around the exact compass center. */}
+            <View
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                alignItems: "center",
+                justifyContent: "center",
+                transform: [{ rotate: `${bearing ?? 0}deg` }],
+              }}
+            >
+              <View
+                style={{
+                  position: "absolute",
+                  top: 29,
+                  width: 4,
+                  height: 100,
+                  borderRadius: 2,
+                  backgroundColor: colors.primary,
+                }}
+              />
+              <View
+                style={{
+                  position: "absolute",
+                  top: 9,
+                  width: 0,
+                  height: 0,
+                  borderLeftWidth: 9,
+                  borderRightWidth: 9,
+                  borderBottomWidth: 20,
+                  borderLeftColor: "transparent",
+                  borderRightColor: "transparent",
+                  borderBottomColor: colors.primary,
+                }}
+              />
+            </View>
+          </Animated.View>
+
+          {/* Fixed center icon: its needle always points where the top of the phone is pointing. */}
+          <View
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              width: 72,
+              height: 72,
+              borderRadius: 36,
+              backgroundColor: colors.surfaceAlt,
               borderWidth: 1,
               borderColor: colors.border,
               alignItems: "center",
               justifyContent: "center",
-              transform: [{ rotate: `${heading ?? 0}deg` }],
             }}
           >
-            <View style={{ position: "absolute", top: 7, width: 2, height: 206, backgroundColor: colors.border }} />
-            <View
-              style={{
-                width: 76,
-                height: 76,
-                borderRadius: 38,
-                backgroundColor: colors.surfaceAlt,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Ionicons name="compass" size={45} color={colors.primary} />
+            <View style={{ transform: [{ rotate: "-45deg" }] }}>
+              <Ionicons name="compass" size={38} color={colors.primary} />
             </View>
           </View>
-          <View
-            style={{
-              position: "absolute",
-              width: 4,
-              height: 105,
-              alignItems: "center",
-              justifyContent: "flex-start",
-              transform: [{ rotate: `${relative}deg` }],
-            }}
-          >
-            <Ionicons name="navigate" size={36} color={colors.primary} />
-          </View>
+
+          {heading === null ? (
+            <View
+              style={{
+                position: "absolute",
+                bottom: 4,
+                backgroundColor: colors.surface,
+                paddingHorizontal: 8,
+                paddingVertical: 3,
+                borderRadius: 10,
+              }}
+            >
+              <Text style={{ color: colors.muted, fontSize: 10 }}>CAP INDISPONIBLE</Text>
+            </View>
+          ) : null}
         </View>
 
         <View
@@ -181,27 +337,37 @@ export default function QiblaScreen() {
           }}
         >
           {loading ? <ActivityIndicator color={colors.primary} /> : null}
-          <Text style={{ color: colors.muted, fontSize: 12 }}>ANGLE DE LA QIBLA</Text>
+          <Text style={{ color: colors.muted, fontSize: 12 }}>ANGLE DEPUIS LE NORD VRAI</Text>
           <Text style={{ color: colors.text, fontSize: 34, fontWeight: "900" }}>
             {bearing === null ? "—" : `${Math.round(bearing)}°`}
           </Text>
+          {heading !== null ? (
+            <Text style={{ color: colors.muted, fontSize: 13 }}>
+              Cap du téléphone : {Math.round(heading)}°
+            </Text>
+          ) : null}
           <Text style={{ color: colors.muted, textAlign: "center", lineHeight: 21 }}>
             {status}
           </Text>
-          {heading === null && bearing !== null ? (
-            <Text style={{ color: colors.muted, fontSize: 11, textAlign: "center" }}>
-              Le cap du compas n’est pas disponible sur cet appareil. La direction géographique reste affichée, mais la rotation en temps réel ne peut pas être garantie.
+          {usingMagneticHeading ? (
+            <Text style={{ color: colors.muted, fontSize: 11, textAlign: "center", lineHeight: 17 }}>
+              Le nord magnétique est utilisé car le nord vrai n’est pas fourni par le capteur. Une légère différence peut apparaître selon ta région.
+            </Text>
+          ) : null}
+          {bearing !== null && heading === null && !loading ? (
+            <Text style={{ color: colors.muted, fontSize: 11, textAlign: "center", lineHeight: 17 }}>
+              La flèche indique la direction depuis le nord de référence, mais le suivi en temps réel nécessite un capteur de boussole compatible.
             </Text>
           ) : null}
           <Pressable
-            onPress={() => {
-              setBearing(null);
-              setHeading(null);
-              setStatus("Relance l’écran pour réessayer.");
-            }}
-            style={{ padding: 12 }}
+            accessibilityRole="button"
+            onPress={() => setRefreshKey((current) => current + 1)}
+            disabled={loading}
+            style={{ padding: 12, opacity: loading ? 0.6 : 1 }}
           >
-            <Text style={{ color: colors.primary, fontWeight: "800" }}>Réinitialiser</Text>
+            <Text style={{ color: colors.primary, fontWeight: "800" }}>
+              {loading ? "Calcul en cours…" : "Actualiser ma position"}
+            </Text>
           </Pressable>
         </View>
       </ScrollView>
