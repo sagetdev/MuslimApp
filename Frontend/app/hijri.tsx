@@ -4,6 +4,7 @@ import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-nati
 import { SafeAreaView } from "react-native-safe-area-context";
 import BackButton from "../components/BackButton";
 import { apiFetch } from "../src/lib/api";
+import { getHijriCache, setHijriCache } from "../src/lib/hijriCache";
 import { useAppTheme } from "../src/theme/ThemeProvider";
 
 type RecordValue = Record<string, unknown>;
@@ -11,11 +12,6 @@ type HijriParts = { day: number; month: number; year: number; monthName: string 
 type IslamicEvent = { id: string; title: string; dateLabel: string; gregorianDate?: string; hijriDay?: number; hijriMonth?: number; description?: string };
 
 type CountdownColors = { primary: string; muted: string; surfaceAlt: string };
-// Cache en mémoire uniquement : conservé pendant la session de l’app, jamais écrit sur disque.
-// Ces Maps disparaissent naturellement lorsque le processus de l’application est fermé.
-const hijriDateMemoryCache = new Map<string, unknown>();
-const eventsMemoryCache = new Map<string, IslamicEvent[]>();
-const islamicMonthsMemoryCache = new Map<string, string[]>();
 
 
 function EventCountdown({ targetTime, colors }: { targetTime: number; colors: CountdownColors }) {
@@ -233,7 +229,7 @@ export default function HijriScreen() {
 
   const loadSelectedDate = useCallback(async () => {
     const cacheKey = `${selectedKey}|${timezone}`;
-    const cached = hijriDateMemoryCache.get(cacheKey);
+    const cached = getHijriCache<unknown>(`date:${cacheKey}`);
     if (cached !== undefined) {
       setHijriDetail(cached);
       setDateError("");
@@ -248,7 +244,7 @@ export default function HijriScreen() {
         params: { date: selectedKey, timezone },
       });
       const detail = unwrap(response);
-      hijriDateMemoryCache.set(cacheKey, detail);
+      setHijriCache(`date:${cacheKey}`, detail);
       setHijriDetail(detail);
     } catch (error) {
       setHijriDetail(null);
@@ -259,8 +255,8 @@ export default function HijriScreen() {
   }, [selectedKey, timezone]);
 
   const loadCalendarData = useCallback(async () => {
-    const cachedEvents = eventsMemoryCache.get(timezone);
-    const cachedMonths = islamicMonthsMemoryCache.get("default");
+    const cachedEvents = getHijriCache<IslamicEvent[]>(`events:${timezone}`);
+    const cachedMonths = getHijriCache<string[]>("months:default");
     if (cachedEvents) setEvents(cachedEvents);
     if (cachedMonths) setIslamicMonths(cachedMonths);
     if (cachedEvents && cachedMonths) {
@@ -282,7 +278,7 @@ export default function HijriScreen() {
       } else if (eventsResult.status === "fulfilled") {
         const eventRecords = asRecords(eventsResult.value, ["events", "items", "results", "islamicEvents"]);
         const normalizedEvents = eventRecords.map(normalizeEvent);
-        eventsMemoryCache.set(timezone, normalizedEvents);
+        setHijriCache(`events:${timezone}`, normalizedEvents);
         setEvents(normalizedEvents);
       } else {
         setEvents([]);
@@ -297,7 +293,7 @@ export default function HijriScreen() {
         const monthRecords = asRecords(monthsResult.value, ["months", "items", "results", "islamicMonths"]);
         const names = monthRecords.map((item) => asText(item.name ?? item.title ?? item.english ?? item.month)).filter(Boolean);
         if (names.length) {
-          islamicMonthsMemoryCache.set("default", names);
+          setHijriCache("months:default", names);
           setIslamicMonths(names);
         }
       }
