@@ -18,7 +18,7 @@ function EventCountdown({ targetTime, colors }: { targetTime: number; colors: Co
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000);
+    const timer = setInterval(() => setNow(Date.now()), 60_000);
     return () => clearInterval(timer);
   }, []);
 
@@ -31,21 +31,15 @@ function EventCountdown({ targetTime, colors }: { targetTime: number; colors: Co
       </View>
     );
   }
-  const units = [
-    { value: Math.floor(remaining / 86_400_000), label: "JOURS" },
-    { value: Math.floor((remaining % 86_400_000) / 3_600_000), label: "HEURES" },
-    { value: Math.floor((remaining % 3_600_000) / 60_000), label: "MIN" },
-    { value: Math.floor((remaining % 60_000) / 1000), label: "SEC" },
-  ];
+
+  const days = Math.ceil(remaining / 86_400_000);
 
   return (
-    <View accessibilityLabel={`Décompte avant l’événement`} style={{ flexDirection: "row", gap: 7 }}>
-      {units.map((unit) => (
-        <View key={unit.label} style={{ flex: 1, alignItems: "center", paddingVertical: 11, borderRadius: 13, backgroundColor: colors.surfaceAlt, gap: 3 }}>
-          <Text style={{ color: colors.primary, fontSize: 23, fontWeight: "900", fontVariant: ["tabular-nums"] }}>{String(unit.value).padStart(2, "0")}</Text>
-          <Text style={{ color: colors.muted, fontSize: 9, fontWeight: "800", letterSpacing: 0.6 }}>{unit.label}</Text>
-        </View>
-      ))}
+    <View accessibilityLabel={`Décompte avant l’événement : ${days} jour(s)`} style={{ flexDirection: "row", gap: 7 }}>
+      <View style={{ flex: 1, alignItems: "center", paddingVertical: 14, borderRadius: 13, backgroundColor: colors.surfaceAlt, gap: 3 }}>
+        <Text style={{ color: colors.primary, fontSize: 28, fontWeight: "900", fontVariant: ["tabular-nums"] }}>{days}</Text>
+        <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "800", letterSpacing: 0.8 }}>{days > 1 ? "JOURS" : "JOUR"}</Text>
+      </View>
     </View>
   );
 }
