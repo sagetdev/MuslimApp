@@ -11,6 +11,12 @@ type HijriParts = { day: number; month: number; year: number; monthName: string 
 type IslamicEvent = { id: string; title: string; dateLabel: string; gregorianDate?: string; hijriDay?: number; hijriMonth?: number; description?: string };
 
 type CountdownColors = { primary: string; muted: string; surfaceAlt: string };
+// Cache en mémoire uniquement : conservé pendant la session de l’app, jamais écrit sur disque.
+// Ces Maps disparaissent naturellement lorsque le processus de l’application est fermé.
+const hijriDateMemoryCache = new Map<string, unknown>();
+const eventsMemoryCache = new Map<string, IslamicEvent[]>();
+const islamicMonthsMemoryCache = new Map<string, string[]>();
+
 
 function EventCountdown({ targetTime, colors }: { targetTime: number; colors: CountdownColors }) {
   const [now, setNow] = useState(() => Date.now());
@@ -226,13 +232,24 @@ export default function HijriScreen() {
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 
   const loadSelectedDate = useCallback(async () => {
+    const cacheKey = `${selectedKey}|${timezone}`;
+    const cached = hijriDateMemoryCache.get(cacheKey);
+    if (cached !== undefined) {
+      setHijriDetail(cached);
+      setDateError("");
+      setLoadingDate(false);
+      return;
+    }
+
     setLoadingDate(true);
     setDateError("");
     try {
       const response = await apiFetch<unknown>("/hijri-date", {
         params: { date: selectedKey, timezone },
       });
-      setHijriDetail(unwrap(response));
+      const detail = unwrap(response);
+      hijriDateMemoryCache.set(cacheKey, detail);
+      setHijriDetail(detail);
     } catch (error) {
       setHijriDetail(null);
       setDateError(error instanceof Error ? error.message : "Impossible de convertir cette date.");
@@ -242,17 +259,31 @@ export default function HijriScreen() {
   }, [selectedKey, timezone]);
 
   const loadCalendarData = useCallback(async () => {
+    const cachedEvents = eventsMemoryCache.get(timezone);
+    const cachedMonths = islamicMonthsMemoryCache.get("default");
+    if (cachedEvents) setEvents(cachedEvents);
+    if (cachedMonths) setIslamicMonths(cachedMonths);
+    if (cachedEvents && cachedMonths) {
+      setEventsError("");
+      setLoadingEvents(false);
+      return;
+    }
+
     setLoadingEvents(true);
     setEventsError("");
     try {
       const [eventsResult, monthsResult] = await Promise.allSettled([
-        apiFetch<unknown>("/islamic-events", { params: { timezone } }),
-        apiFetch<unknown>("/islamic-months"),
+        cachedEvents ? Promise.resolve(null) : apiFetch<unknown>("/islamic-events", { params: { timezone } }),
+        cachedMonths ? Promise.resolve(null) : apiFetch<unknown>("/islamic-months"),
       ]);
 
-      if (eventsResult.status === "fulfilled") {
+      if (cachedEvents) {
+        setEvents(cachedEvents);
+      } else if (eventsResult.status === "fulfilled") {
         const eventRecords = asRecords(eventsResult.value, ["events", "items", "results", "islamicEvents"]);
-        setEvents(eventRecords.map(normalizeEvent));
+        const normalizedEvents = eventRecords.map(normalizeEvent);
+        eventsMemoryCache.set(timezone, normalizedEvents);
+        setEvents(normalizedEvents);
       } else {
         setEvents([]);
         setEventsError(eventsResult.reason instanceof Error
@@ -260,10 +291,15 @@ export default function HijriScreen() {
           : "Les événements n’ont pas pu être chargés.");
       }
 
-      if (monthsResult.status === "fulfilled") {
+      if (cachedMonths) {
+        setIslamicMonths(cachedMonths);
+      } else if (monthsResult.status === "fulfilled") {
         const monthRecords = asRecords(monthsResult.value, ["months", "items", "results", "islamicMonths"]);
         const names = monthRecords.map((item) => asText(item.name ?? item.title ?? item.english ?? item.month)).filter(Boolean);
-        if (names.length) setIslamicMonths(names);
+        if (names.length) {
+          islamicMonthsMemoryCache.set("default", names);
+          setIslamicMonths(names);
+        }
       }
     } catch (error) {
       setEventsError(error instanceof Error ? error.message : "Les événements n’ont pas pu être chargés.");
