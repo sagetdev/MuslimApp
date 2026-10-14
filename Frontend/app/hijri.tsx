@@ -160,6 +160,7 @@ export default function HijriScreen() {
   const [loadingEvents, setLoadingEvents] = useState(true);
   const [dateError, setDateError] = useState("");
   const [eventsError, setEventsError] = useState("");
+  const [clockNow, setClockNow] = useState(() => Date.now());
 
   const selectedDate = useMemo(() => parseDateKey(selectedKey), [selectedKey]);
   const selectedHijri = useMemo(() => readHijriParts(selectedDate), [selectedDate]);
@@ -204,6 +205,10 @@ export default function HijriScreen() {
 
   useEffect(() => { void loadSelectedDate(); }, [loadSelectedDate]);
   useEffect(() => { void loadCalendarData(); }, [loadCalendarData]);
+  useEffect(() => {
+    const timer = setInterval(() => setClockNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const calendarDays = useMemo(() => {
     const firstDay = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), 1, 12);
@@ -245,6 +250,14 @@ export default function HijriScreen() {
       .sort((a, b) => (a.gregorianDate ?? "").localeCompare(b.gregorianDate ?? ""))
       .slice(0, 3);
   }, [events, todayKey]);
+
+  const nextEvent = upcomingEvents[0];
+  const nextEventTarget = nextEvent?.gregorianDate ? parseDateKey(nextEvent.gregorianDate).getTime() : null;
+  const countdownMs = nextEventTarget === null ? null : Math.max(0, nextEventTarget - clockNow);
+  const countdownDays = countdownMs === null ? 0 : Math.floor(countdownMs / 86_400_000);
+  const countdownHours = countdownMs === null ? 0 : Math.floor((countdownMs % 86_400_000) / 3_600_000);
+  const countdownMinutes = countdownMs === null ? 0 : Math.floor((countdownMs % 3_600_000) / 60_000);
+  const countdownSeconds = countdownMs === null ? 0 : Math.floor((countdownMs % 60_000) / 1000);
 
   const changeMonth = (amount: number) => {
     setVisibleMonth((current) => new Date(current.getFullYear(), current.getMonth() + amount, 1, 12));
@@ -355,15 +368,15 @@ export default function HijriScreen() {
                     justifyContent: "center",
                     gap: 3,
                     borderRadius: 13,
-                    borderWidth: selected || isToday ? 1 : 0,
-                    borderColor: selected ? colors.primary : isToday ? colors.border : "transparent",
-                    backgroundColor: selected ? colors.primary : isToday ? colors.surfaceAlt : "transparent",
+                    borderWidth: selected || hasEvent || isToday ? (selected ? 1.5 : hasEvent ? 1.25 : 1) : 0,
+                    borderColor: selected ? colors.primary : hasEvent ? colors.primary : isToday ? colors.border : "transparent",
+                    backgroundColor: selected ? colors.primary : hasEvent ? colors.surfaceAlt : isToday ? colors.surfaceAlt : "transparent",
                     opacity: pressed ? 0.7 : inMonth ? 1 : 0.42,
                   })}
                 >
                   <Text style={{ color: selected ? colors.primaryText : colors.text, fontSize: 14, fontWeight: selected || isToday ? "900" : "700", fontVariant: ["tabular-nums"] }}>{date.getDate()}</Text>
                   <Text style={{ color: selected ? colors.primaryText : colors.muted, fontSize: 9, fontWeight: "600" }}>{hijri?.day ?? "—"}</Text>
-                  {hasEvent ? <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: selected ? colors.primaryText : colors.primary }} /> : <View style={{ width: 4, height: 4 }} />}
+                  {hasEvent ? <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}><Ionicons name="star" size={8} color={selected ? colors.primaryText : colors.primary} /><View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: selected ? colors.primaryText : colors.primary }} /></View> : <View style={{ height: 8 }} />}
                 </Pressable>
               );
             })}
@@ -446,7 +459,7 @@ export default function HijriScreen() {
                 onPress={() => {
                   if (event.gregorianDate) chooseDate(event.gregorianDate);
                   else if (event.hijriDay && event.hijriMonth) {
-                    const match = calendarDays.find((day) => day.hijri?.day === event.hijriDay && day.hijri.month === event.hijriMonth);
+                    const match = calendarDays.find((day) => day.hijri?.day === event.hijriDay && day.hijri?.month === event.hijriMonth);
                     if (match) chooseDate(match.key);
                   }
                 }}
