@@ -136,6 +136,7 @@ export default function TasbihScreen() {
   }, [state, ready]);
 
   useFocusEffect(useCallback(() => {
+    if (!ready) return;
     let active = true;
     void readDuaFavorites().then((favorites) => {
       if (!active) return;
@@ -152,7 +153,7 @@ export default function TasbihScreen() {
     return () => {
       active = false;
     };
-  }, []));
+  }, [ready]));
 
   const favoriteDhikrs = useMemo<Dhikr[]>(() => duaFavorites.map((favorite) => ({
     id: "dua:" + favorite.id,
