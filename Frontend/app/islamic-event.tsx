@@ -14,7 +14,7 @@ type EncyclopediaSummary = {
 };
 
 function wikipediaArticleForEvent(title: string): string {
-  const value = title.toLocaleLowerCase("fr").normalize("NFD").replace(/[\\u0300-\\u036f]/g, "");
+  const value = title.toLocaleLowerCase("fr").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   if (value.includes("ramadan")) return "Ramadan";
   if (value.includes("fitr")) return "Aïd el-Fitr";
   if (value.includes("adha") || value.includes("ad-ha") || value.includes("sacrifice")) return "Aïd el-Adha";
