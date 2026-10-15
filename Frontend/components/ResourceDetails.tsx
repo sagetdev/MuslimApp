@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import type { ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
-import { useAppTheme } from "../theme/ThemeProvider";
+import { useAppTheme } from "../src/theme/ThemeProvider";
 import {
   type RecordValue,
   type ResourceKind,
