@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "expo-router";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import BackButton from "../components/BackButton";
@@ -204,6 +205,23 @@ function longDateLabel(date: Date): string {
 
 export default function HijriScreen() {
   const { colors } = useAppTheme();
+  const router = useRouter();
+
+  const openEvent = (event: IslamicEvent, countdownDate?: string) => {
+    router.push({
+      pathname: "/islamic-event",
+      params: {
+        id: event.id,
+        title: event.title,
+        dateLabel: event.dateLabel,
+        ...(event.gregorianDate ? { gregorianDate: event.gregorianDate } : {}),
+        ...(countdownDate ? { gregorianDate: countdownDate } : {}),
+        ...(event.hijriDay ? { hijriDay: String(event.hijriDay) } : {}),
+        ...(event.hijriMonth ? { hijriMonth: String(event.hijriMonth) } : {}),
+        ...(event.description ? { description: event.description } : {}),
+      },
+    });
+  };
   const today = useMemo(() => new Date(), []);
   const todayKey = localDateKey(today);
   const [visibleMonth, setVisibleMonth] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1, 12));
@@ -518,11 +536,14 @@ export default function HijriScreen() {
             <View style={{ gap: 9, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 13 }}>
               <Text style={{ color: colors.primary, fontSize: 10, fontWeight: "900", letterSpacing: 1.2 }}>REPÈRE ISLAMIQUE</Text>
               {selectedEvents.map((event) => (
-                <View key={event.id} style={{ gap: 5 }}>
-                  <Text style={{ color: colors.text, fontSize: 15, fontWeight: "800" }}>{event.title}</Text>
+                <Pressable key={event.id} accessibilityRole="button" accessibilityLabel={`Voir les détails de ${event.title}`} onPress={() => openEvent(event)} style={({ pressed }) => ({ gap: 6, paddingVertical: 7, opacity: pressed ? 0.7 : 1 })}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    <Text style={{ flex: 1, color: colors.text, fontSize: 15, fontWeight: "800" }}>{event.title}</Text>
+                    <Ionicons name="chevron-forward" size={17} color={colors.muted} />
+                  </View>
                   {event.description ? <Text style={{ color: colors.muted, fontSize: 13, lineHeight: 20 }}>{event.description}</Text> : null}
                   <Text style={{ color: colors.muted, fontSize: 11 }}>{event.dateLabel}</Text>
-                </View>
+                </Pressable>
               ))}
             </View>
           ) : (
@@ -570,13 +591,7 @@ export default function HijriScreen() {
               <Pressable
                 key={event.id}
                 accessibilityRole="button"
-                onPress={() => {
-                  if (event.gregorianDate) chooseDate(event.gregorianDate);
-                  else if (event.hijriDay && event.hijriMonth) {
-                    const match = calendarDays.find((day) => day.hijri?.day === event.hijriDay && day.hijri?.month === event.hijriMonth);
-                    if (match) chooseDate(match.key);
-                  }
-                }}
+                onPress={() => openEvent(event, event.countdownDate)}
                 style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: 12, padding: 15, borderRadius: 18, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, opacity: pressed ? 0.75 : 1 })}
               >
                 <View style={{ width: 42, height: 42, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: colors.surfaceAlt }}>
