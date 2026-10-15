@@ -5,6 +5,7 @@ import { Alert, Platform, Pressable, ScrollView, Text, TextInput, Vibration, Vie
 import { SafeAreaView } from "react-native-safe-area-context";
 import BackButton from "../components/BackButton";
 import { useAppTheme } from "../src/theme/ThemeProvider";
+import { readDuaFavorites, type DuaFavorite } from "../src/lib/duaFavorites";
 
 const STORAGE_KEY = "muslimapp:tasbih:v1";
 
@@ -15,6 +16,7 @@ type Dhikr = {
   meaning: string;
   target: number | null;
   custom?: boolean;
+  favorite?: boolean;
   counterOnly?: boolean;
 };
 
@@ -51,7 +53,7 @@ function todayKey(): string {
 }
 
 function emptyState(): TasbihState {
-  return { selected: DEFAULT_DHIKRS[0].id, customDhikrs: [], counts: {}, laps: {}, day: todayKey(), today: 0 };
+  return { selected: "", customDhikrs: [], counts: {}, laps: {}, day: todayKey(), today: 0 };
 }
 
 function sanitize(raw: unknown): TasbihState {
@@ -72,12 +74,12 @@ function sanitize(raw: unknown): TasbihState {
         }))
         .slice(0, 100)
     : [];
-  const validIds = new Set([...DEFAULT_DHIKRS, ...customDhikrs, COUNTER_ONLY].map((item) => item.id));
+  const validIds = new Set(["", ...DEFAULT_DHIKRS, ...customDhikrs, COUNTER_ONLY].map((item) => item.id));
   const cleanMap = (map: unknown) => {
     const out: Record<string, number> = {};
     if (map && typeof map === "object") {
       for (const [id, count] of Object.entries(map as Record<string, unknown>)) {
-        if (validIds.has(id)) out[id] = num(count);
+        if (validIds.has(id) || id.startsWith("dua:")) out[id] = num(count);
       }
     }
     return out;
@@ -85,7 +87,7 @@ function sanitize(raw: unknown): TasbihState {
   const sameDay = value.day === base.day;
   const selected = typeof value.selected === "number"
     ? DEFAULT_DHIKRS[Math.min(DEFAULT_DHIKRS.length - 1, num(value.selected))]?.id ?? base.selected
-    : typeof value.selected === "string" && validIds.has(value.selected)
+    : typeof value.selected === "string" && (validIds.has(value.selected) || value.selected.startsWith("dua:"))
       ? value.selected
       : base.selected;
   return {
@@ -103,6 +105,8 @@ export default function TasbihScreen() {
   const [state, setState] = useState<TasbihState>(emptyState);
   const [ready, setReady] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [duaFavorites, setDuaFavorites] = useState<DuaFavorite[]>([]);
   const [newLabel, setNewLabel] = useState("");
   const [newArabic, setNewArabic] = useState("");
   const [newMeaning, setNewMeaning] = useState("");
@@ -130,16 +134,46 @@ export default function TasbihScreen() {
     void AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state)).catch(() => {});
   }, [state, ready]);
 
-  const items = useMemo(() => [...DEFAULT_DHIKRS, ...state.customDhikrs, COUNTER_ONLY], [state.customDhikrs]);
-  const dhikr = items.find((item) => item.id === state.selected) ?? DEFAULT_DHIKRS[0];
+  useEffect(() => {
+    let active = true;
+    void readDuaFavorites().then((favorites) => {
+      if (!active) return;
+      setDuaFavorites(favorites);
+      setState((current) => {
+        const hasSelectedFavorite = favorites.some((favorite) => "dua:" + favorite.id === current.selected);
+        const legacySelection = DEFAULT_DHIKRS.some((item) => item.id === current.selected);
+        if (hasSelectedFavorite || (current.selected && !legacySelection)) return current;
+        if (favorites.length) return { ...current, selected: "dua:" + favorites[0].id };
+        return { ...current, selected: "" };
+      });
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const favoriteDhikrs = useMemo<Dhikr[]>(() => duaFavorites.map((favorite) => ({
+    id: "dua:" + favorite.id,
+    label: favorite.title,
+    arabic: favorite.arabic,
+    meaning: favorite.meaning || favorite.category || "Invocation favorite",
+    target: favorite.target,
+    favorite: true,
+  })), [duaFavorites]);
+  const items = useMemo(() => [...favoriteDhikrs, ...state.customDhikrs, COUNTER_ONLY, ...DEFAULT_DHIKRS], [favoriteDhikrs, state.customDhikrs]);
+  const dhikr = items.find((item) => item.id === state.selected) ?? favoriteDhikrs[0] ?? COUNTER_ONLY;
   const count = state.counts[dhikr.id] ?? 0;
   const laps = state.laps[dhikr.id] ?? 0;
   const progress = dhikr.target ? Math.min(1, count / dhikr.target) : 0;
 
   const increment = useCallback(() => {
     const current = stateRef.current;
-    const currentItems = [...DEFAULT_DHIKRS, ...current.customDhikrs, COUNTER_ONLY];
-    const item = currentItems.find((entry) => entry.id === current.selected) ?? DEFAULT_DHIKRS[0];
+    const currentFavorites: Dhikr[] = duaFavorites.map((favorite) => ({
+      id: "dua:" + favorite.id, label: favorite.title, arabic: favorite.arabic,
+      meaning: favorite.meaning || favorite.category || "Invocation favorite", target: favorite.target, favorite: true,
+    }));
+    const currentItems = [...currentFavorites, ...current.customDhikrs, COUNTER_ONLY, ...DEFAULT_DHIKRS];
+    const item = currentItems.find((entry) => entry.id === current.selected) ?? currentFavorites[0] ?? COUNTER_ONLY;
     const next = (current.counts[item.id] ?? 0) + 1;
     const completed = item.target !== null && next >= item.target;
     if (Platform.OS !== "web") Vibration.vibrate(completed ? [0, 60, 60, 60] : 12);
@@ -150,7 +184,7 @@ export default function TasbihScreen() {
       counts: { ...current.counts, [item.id]: completed ? 0 : next },
       laps: completed ? { ...current.laps, [item.id]: (current.laps[item.id] ?? 0) + 1 } : current.laps,
     });
-  }, []);
+  }, [duaFavorites]);
 
   const resetCurrent = useCallback(() => {
     const doReset = () =>
@@ -211,7 +245,7 @@ export default function TasbihScreen() {
   const deleteFavorite = useCallback((id: string) => {
     const remove = () => setState((current) => ({
       ...current,
-      selected: current.selected === id ? DEFAULT_DHIKRS[0].id : current.selected,
+      selected: current.selected === id ? (duaFavorites[0] ? "dua:" + duaFavorites[0].id : "") : current.selected,
       customDhikrs: current.customDhikrs.filter((item) => item.id !== id),
       counts: Object.fromEntries(Object.entries(current.counts).filter(([key]) => key !== id)),
       laps: Object.fromEntries(Object.entries(current.laps).filter(([key]) => key !== id)),
@@ -224,7 +258,7 @@ export default function TasbihScreen() {
       { text: "Annuler", style: "cancel" },
       { text: "Supprimer", style: "destructive", onPress: remove },
     ]);
-  }, []);
+  }, [duaFavorites]);
 
   const inputStyle = {
     color: colors.text,
@@ -245,25 +279,26 @@ export default function TasbihScreen() {
           <Text style={{ color: colors.primary, fontSize: 10, fontWeight: "900", letterSpacing: 1.8 }}>DHIKR</Text>
           <Text style={{ color: colors.text, fontSize: 30, fontWeight: "800" }}>Tasbih</Text>
           <Text style={{ color: colors.muted, lineHeight: 21 }}>
-            Compte tes invocations favorites ou utilise le compteur seul. Tes favoris et ta progression restent enregistrés sur cet appareil.
+            Retrouve ici les invocations que tu as enregistrées avec le cœur dans Adhkar. Chaque compteur et ta progression sont conservés sur cet appareil.
           </Text>
         </View>
 
         <View style={{ gap: 9 }}>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-            <Text style={{ color: colors.text, fontSize: 15, fontWeight: "800" }}>Invocations</Text>
+            <Text style={{ color: colors.text, fontSize: 15, fontWeight: "800" }}>Mes invocations favorites</Text>
             <Pressable
               accessibilityRole="button"
-              onPress={() => setShowAddForm((visible) => !visible)}
-              style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 9, paddingHorizontal: 12, borderRadius: 12, backgroundColor: colors.primary }}
+              onPress={() => setShowAdvanced((visible) => !visible)}
+              style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}
             >
-              <Ionicons name={showAddForm ? "close" : "add"} size={18} color={colors.primaryText} />
-              <Text style={{ color: colors.primaryText, fontSize: 12, fontWeight: "800" }}>{showAddForm ? "Fermer" : "Ajouter un favori"}</Text>
+              <Ionicons name={showAdvanced ? "chevron-up" : "ellipsis-horizontal"} size={16} color={colors.muted} />
+              <Text style={{ color: colors.muted, fontSize: 11, fontWeight: "700" }}>{showAdvanced ? "Masquer les options" : "Options"}</Text>
             </Pressable>
           </View>
 
-          <View accessibilityRole="radiogroup" style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            {items.map((item) => {
+          {favoriteDhikrs.length ? (
+            <View accessibilityRole="radiogroup" style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+            {favoriteDhikrs.map((item) => {
               const selected = item.id === state.selected;
               return (
                 <Pressable
@@ -284,13 +319,42 @@ export default function TasbihScreen() {
                   }}
                 >
                   <Text style={{ color: selected ? colors.primaryText : colors.text, fontSize: 12, fontWeight: "700" }}>{item.label}</Text>
-                  {item.custom ? <Ionicons name="heart" size={12} color={selected ? colors.primaryText : colors.primary} /> : null}
+                  <Ionicons name="heart" size={12} color={selected ? colors.primaryText : colors.primary} />
                 </Pressable>
               );
             })}
-          </View>
+            </View>
+          ) : (
+            <View style={{ borderRadius: 16, padding: 16, gap: 6, backgroundColor: colors.surfaceAlt }}>
+              <Ionicons name="heart-outline" size={22} color={colors.primary} />
+              <Text style={{ color: colors.text, fontSize: 14, fontWeight: "800" }}>Aucun favori pour le moment</Text>
+              <Text style={{ color: colors.muted, fontSize: 12, lineHeight: 18 }}>Ouvre « Invocations & adhkar », puis appuie sur « Ajouter aux favoris » dans le détail d’une invocation. Elle apparaîtra ici automatiquement.</Text>
+            </View>
+          )}
 
-          {showAddForm ? (
+          {showAdvanced ? (
+            <View style={{ borderRadius: 16, padding: 14, gap: 11, backgroundColor: colors.surfaceAlt }}>
+              <Text style={{ color: colors.text, fontSize: 13, fontWeight: "800" }}>Options secondaires</Text>
+              <Pressable accessibilityRole="button" onPress={() => setState((current) => ({ ...current, selected: COUNTER_ONLY.id }))} style={{ alignSelf: "flex-start", paddingHorizontal: 12, paddingVertical: 9, borderRadius: 11, borderWidth: 1, borderColor: colors.border }}>
+                <Text style={{ color: colors.text, fontSize: 12, fontWeight: "700" }}>Utiliser le compteur libre</Text>
+              </Pressable>
+              {state.customDhikrs.length ? (
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                  {state.customDhikrs.map((item) => (
+                    <Pressable key={item.id} accessibilityRole="button" onPress={() => setState((current) => ({ ...current, selected: item.id }))} style={{ paddingHorizontal: 11, paddingVertical: 8, borderRadius: 11, borderWidth: 1, borderColor: state.selected === item.id ? colors.primary : colors.border }}>
+                      <Text style={{ color: colors.text, fontSize: 12, fontWeight: "700" }}>{item.label}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : null}
+              <Pressable accessibilityRole="button" onPress={() => setShowAddForm((visible) => !visible)} style={{ alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 7 }}>
+                <Ionicons name={showAddForm ? "close" : "add-circle-outline"} size={17} color={colors.primary} />
+                <Text style={{ color: colors.primary, fontSize: 12, fontWeight: "800" }}>{showAddForm ? "Fermer la création" : "Créer une invocation personnalisée"}</Text>
+              </Pressable>
+            </View>
+          ) : null}
+
+          {showAddForm && showAdvanced ? (
             <View style={{ padding: 16, gap: 11, borderRadius: 18, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}>
               <Text style={{ color: colors.text, fontSize: 16, fontWeight: "800" }}>Créer une invocation favorite</Text>
               <Text style={{ color: colors.muted, fontSize: 12, lineHeight: 18 }}>Le nom est obligatoire. L’arabe, la traduction et l’objectif sont facultatifs. Sans objectif, le compteur continue sans se remettre à zéro.</Text>
