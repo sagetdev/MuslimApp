@@ -3,6 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Platform, Pressable, ScrollView, Text, TextInput, Vibration, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useFocusEffect } from "expo-router";
 import BackButton from "../components/BackButton";
 import { useAppTheme } from "../src/theme/ThemeProvider";
 import { readDuaFavorites, type DuaFavorite } from "../src/lib/duaFavorites";
@@ -74,7 +75,7 @@ function sanitize(raw: unknown): TasbihState {
         }))
         .slice(0, 100)
     : [];
-  const validIds = new Set(["", ...DEFAULT_DHIKRS, ...customDhikrs, COUNTER_ONLY].map((item) => item.id));
+  const validIds = new Set(["", ...DEFAULT_DHIKRS.map((item) => item.id), ...customDhikrs.map((item) => item.id), COUNTER_ONLY.id]);
   const cleanMap = (map: unknown) => {
     const out: Record<string, number> = {};
     if (map && typeof map === "object") {
@@ -134,7 +135,7 @@ export default function TasbihScreen() {
     void AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state)).catch(() => {});
   }, [state, ready]);
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     let active = true;
     void readDuaFavorites().then((favorites) => {
       if (!active) return;
@@ -142,7 +143,8 @@ export default function TasbihScreen() {
       setState((current) => {
         const hasSelectedFavorite = favorites.some((favorite) => "dua:" + favorite.id === current.selected);
         const legacySelection = DEFAULT_DHIKRS.some((item) => item.id === current.selected);
-        if (hasSelectedFavorite || (current.selected && !legacySelection)) return current;
+        const selectedWasRemoved = current.selected.startsWith("dua:") && !hasSelectedFavorite;
+        if (hasSelectedFavorite || (current.selected && !legacySelection && !selectedWasRemoved)) return current;
         if (favorites.length) return { ...current, selected: "dua:" + favorites[0].id };
         return { ...current, selected: "" };
       });
@@ -150,7 +152,7 @@ export default function TasbihScreen() {
     return () => {
       active = false;
     };
-  }, []);
+  }, []));
 
   const favoriteDhikrs = useMemo<Dhikr[]>(() => duaFavorites.map((favorite) => ({
     id: "dua:" + favorite.id,
@@ -369,6 +371,7 @@ export default function TasbihScreen() {
           ) : null}
         </View>
 
+        {favoriteDhikrs.length > 0 || showAdvanced ? (
         <View style={{ backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: 24, padding: 22, alignItems: "center", gap: 14 }}>
           {dhikr.arabic ? <Text style={{ color: colors.text, fontSize: 30, lineHeight: 52, textAlign: "center" }}>{dhikr.arabic}</Text> : null}
           <Text style={{ color: colors.muted, fontSize: 13, textAlign: "center" }}>{dhikr.meaning || (dhikr.counterOnly ? "Compteur libre" : "Invocation favorite")}</Text>
@@ -439,6 +442,7 @@ export default function TasbihScreen() {
             ) : null}
           </View>
         </View>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
