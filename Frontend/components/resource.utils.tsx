@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { View, Text } from "react-native";
-import { useAppTheme } from "../theme/ThemeProvider";
-import createExploreStyles from "../styles/explore.styles";
+import { useAppTheme } from "../src/theme/ThemeProvider";
+import createExploreStyles from "../src/styles/explore.styles";
 
 export type ResourceKind = "generic" | "duas" | "names" | "hadith";
 
