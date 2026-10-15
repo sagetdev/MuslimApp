@@ -39,7 +39,7 @@ function favoriteId(item: Record<string, unknown>): string {
 }
 
 export function toDuaFavorite(item: Record<string, unknown>, category = ""): DuaFavorite {
-  const repetitions = textFrom(item, ["repetitions", "repeatCount", "repeat_count", "repeatTimes", "repeat_times", "times", "count", "numberOfRepetitions"]);
+  const repetitions = textFrom(item, ["target", "goal", "repetitions", "repeat", "repeatCount", "repeat_count", "repeatTimes", "repeat_times", "times", "count", "numberOfRepetitions"]);
   const parsedTarget = /^\d+$/.test(repetitions) ? Number.parseInt(repetitions, 10) : null;
   return {
     id: favoriteId(item),
