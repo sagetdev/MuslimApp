@@ -1,10 +1,30 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useMemo, type ReactNode } from "react";
-import { ScrollView, Text, View, Pressable } from "react-native";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Linking, ScrollView, Text, View, Pressable, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import BackButton from "../components/BackButton";
 import { useAppTheme } from "../src/theme/ThemeProvider";
+
+
+type EncyclopediaSummary = {
+  title: string;
+  extract: string;
+  pageUrl: string;
+};
+
+function wikipediaArticleForEvent(title: string): string {
+  const value = title.toLocaleLowerCase("fr").normalize("NFD").replace(/[\\u0300-\\u036f]/g, "");
+  if (value.includes("ramadan")) return "Ramadan";
+  if (value.includes("fitr")) return "Aïd el-Fitr";
+  if (value.includes("adha") || value.includes("ad-ha") || value.includes("sacrifice")) return "Aïd el-Adha";
+  if (value.includes("ashura") || value.includes("achoura")) return "Achoura";
+  if (value.includes("mawlid") || value.includes("naissance du prophete") || value.includes("prophète")) return "Mawlid";
+  if (value.includes("laylat") || value.includes("nuit du destin") || value.includes("qadr")) return "Laylat al-Qadr";
+  if (value.includes("arafa") || value.includes("arafat")) return "Jour d'Arafat";
+  if (value.includes("hijri") || value.includes("nouvel an") || value.includes("mouharram") || value.includes("muharram")) return "Nouvel an musulman";
+  return title.trim();
+}
 
 type EventProfile = {
   subtitle: string;
@@ -116,6 +136,43 @@ export default function IslamicEventScreen() {
   const dateLabel = typeof params.dateLabel === "string" ? params.dateLabel : "Date à confirmer";
   const description = typeof params.description === "string" ? params.description : "";
   const profile = useMemo(() => profileForEvent(title), [title]);
+  const [encyclopedia, setEncyclopedia] = useState<EncyclopediaSummary | null>(null);
+  const [encyclopediaLoading, setEncyclopediaLoading] = useState(false);
+  const [encyclopediaError, setEncyclopediaError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    const articleTitle = wikipediaArticleForEvent(title);
+    setEncyclopedia(null);
+    setEncyclopediaError("");
+    setEncyclopediaLoading(true);
+
+    fetch(`https://fr.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(articleTitle)}`, {
+      headers: { Accept: "application/json" },
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Aucun article encyclopédique disponible pour cet événement.");
+        return response.json();
+      })
+      .then((data: { title?: unknown; extract?: unknown; content_urls?: { desktop?: { page?: unknown } } }) => {
+        const extract = typeof data.extract === "string" ? data.extract.trim() : "";
+        const pageUrl = typeof data.content_urls?.desktop?.page === "string" ? data.content_urls.desktop.page : "";
+        if (!extract || !pageUrl) throw new Error("L’article ne contient pas de résumé exploitable.");
+        if (active) setEncyclopedia({
+          title: typeof data.title === "string" ? data.title : articleTitle,
+          extract,
+          pageUrl,
+        });
+      })
+      .catch((error: unknown) => {
+        if (active) setEncyclopediaError(error instanceof Error ? error.message : "L’article n’a pas pu être chargé.");
+      })
+      .finally(() => {
+        if (active) setEncyclopediaLoading(false);
+      });
+
+    return () => { active = false; };
+  }, [title]);
   const gregorianDate = typeof params.gregorianDate === "string" ? params.gregorianDate : "";
   const hijriDay = typeof params.hijriDay === "string" ? params.hijriDay : "";
   const hijriMonth = typeof params.hijriMonth === "string" ? params.hijriMonth : "";
@@ -160,6 +217,34 @@ export default function IslamicEventScreen() {
         <InfoSection title="Pourquoi cette date est importante" icon="book-outline" colors={colors}>
           <Text style={{ color: colors.text, fontSize: 14, lineHeight: 23 }}>{profile.significance}</Text>
         </InfoSection>
+
+        <InfoSection title="Approfondir l’histoire" icon="library-outline" colors={colors}>
+          {encyclopediaLoading ? (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text style={{ color: colors.muted, fontSize: 13 }}>Recherche d’informations complémentaires…</Text>
+            </View>
+          ) : encyclopedia ? (
+            <>
+              <Text style={{ color: colors.text, fontSize: 12, fontWeight: "900" }}>Résumé encyclopédique · {encyclopedia.title}</Text>
+              <Text style={{ color: colors.text, fontSize: 14, lineHeight: 23 }}>{encyclopedia.extract}</Text>
+              <Pressable
+                accessibilityRole="link"
+                onPress={() => { void Linking.openURL(encyclopedia.pageUrl); }}
+                style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: 7, paddingTop: 4, opacity: pressed ? 0.65 : 1 })}
+              >
+                <Text style={{ color: colors.primary, fontSize: 13, fontWeight: "800" }}>Lire la source complète sur Wikipédia</Text>
+                <Ionicons name="open-outline" size={15} color={colors.primary} />
+              </Pressable>
+            </>
+          ) : (
+            <Text style={{ color: colors.muted, fontSize: 13, lineHeight: 21 }}>
+              {encyclopediaError || "Les informations détaillées restent disponibles dans les sections ci-dessus."}
+              {" "}Le résumé externe est facultatif : les explications principales de cette page restent visibles sans cette connexion.
+            </Text>
+          )}
+        </InfoSection>
+
         <InfoSection title="Repères et pratiques" icon="checkmark-circle-outline" colors={colors}>
           {profile.practices.map((item, index) => (
             <View key={item} style={{ flexDirection: "row", alignItems: "flex-start", gap: 9 }}>
