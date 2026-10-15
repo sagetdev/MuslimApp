@@ -7,6 +7,7 @@ import { useAppTheme } from "../src/theme/ThemeProvider";
 import createExploreStyles from "../src/styles/explore.styles";
 import BackButton from "./BackButton";
 import { DetailCard } from "./ResourceDetails";
+export type { ResourceConfig } from "./resource.utils";
 import {
   type ResourceConfig,
   type RecordValue,
