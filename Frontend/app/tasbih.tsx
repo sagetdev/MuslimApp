@@ -1,24 +1,44 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, Platform, Pressable, ScrollView, Text, Vibration, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Alert, Platform, Pressable, ScrollView, Text, TextInput, Vibration, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import BackButton from "../components/BackButton";
 import { useAppTheme } from "../src/theme/ThemeProvider";
 
 const STORAGE_KEY = "muslimapp:tasbih:v1";
 
-const DHIKRS = [
+type Dhikr = {
+  id: string;
+  label: string;
+  arabic: string;
+  meaning: string;
+  target: number | null;
+  custom?: boolean;
+  counterOnly?: boolean;
+};
+
+const DEFAULT_DHIKRS: Dhikr[] = [
   { id: "subhanallah", arabic: "سُبْحَانَ ٱللَّٰهِ", label: "SubhanAllah", meaning: "Gloire à Allah", target: 33 },
   { id: "alhamdulillah", arabic: "ٱلْحَمْدُ لِلَّٰهِ", label: "Alhamdulillah", meaning: "Louange à Allah", target: 33 },
   { id: "allahu-akbar", arabic: "ٱللَّٰهُ أَكْبَرُ", label: "Allahu Akbar", meaning: "Allah est le Plus Grand", target: 34 },
   { id: "la-ilaha", arabic: "لَا إِلَٰهَ إِلَّا ٱللَّٰهُ", label: "La ilaha illa Allah", meaning: "Il n’y a de divinité qu’Allah", target: 100 },
   { id: "istighfar", arabic: "أَسْتَغْفِرُ ٱللَّٰهَ", label: "Astaghfirullah", meaning: "Je demande pardon à Allah", target: 100 },
   { id: "salawat", arabic: "ٱللَّٰهُمَّ صَلِّ عَلَىٰ مُحَمَّدٍ", label: "Salawat", meaning: "Prière sur le Prophète ﷺ", target: 100 },
-] as const;
+];
+
+const COUNTER_ONLY: Dhikr = {
+  id: "counter-only",
+  label: "Compteur seul",
+  arabic: "",
+  meaning: "Compte librement, sans invocation ni objectif prédéfini.",
+  target: null,
+  counterOnly: true,
+};
 
 type TasbihState = {
-  selected: number;
+  selected: string;
+  customDhikrs: Dhikr[];
   counts: Record<string, number>;
   laps: Record<string, number>;
   day: string;
@@ -31,24 +51,46 @@ function todayKey(): string {
 }
 
 function emptyState(): TasbihState {
-  return { selected: 0, counts: {}, laps: {}, day: todayKey(), today: 0 };
+  return { selected: DEFAULT_DHIKRS[0].id, customDhikrs: [], counts: {}, laps: {}, day: todayKey(), today: 0 };
 }
 
 function sanitize(raw: unknown): TasbihState {
   const base = emptyState();
   if (!raw || typeof raw !== "object") return base;
-  const value = raw as Partial<TasbihState>;
+  const value = raw as Partial<TasbihState> & { selected?: string | number };
   const num = (n: unknown) => (typeof n === "number" && Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0);
+  const customDhikrs: Dhikr[] = Array.isArray(value.customDhikrs)
+    ? value.customDhikrs
+        .filter((item): item is Dhikr => Boolean(item && typeof item === "object" && typeof item.id === "string" && typeof item.label === "string" && item.custom === true))
+        .map((item) => ({
+          id: item.id,
+          label: item.label.slice(0, 60),
+          arabic: typeof item.arabic === "string" ? item.arabic.slice(0, 240) : "",
+          meaning: typeof item.meaning === "string" ? item.meaning.slice(0, 160) : "",
+          target: typeof item.target === "number" && Number.isFinite(item.target) && item.target > 0 ? Math.floor(item.target) : null,
+          custom: true,
+        }))
+        .slice(0, 100)
+    : [];
+  const validIds = new Set([...DEFAULT_DHIKRS, ...customDhikrs, COUNTER_ONLY].map((item) => item.id));
   const cleanMap = (map: unknown) => {
     const out: Record<string, number> = {};
     if (map && typeof map === "object") {
-      for (const d of DHIKRS) out[d.id] = num((map as Record<string, unknown>)[d.id]);
+      for (const [id, count] of Object.entries(map as Record<string, unknown>)) {
+        if (validIds.has(id)) out[id] = num(count);
+      }
     }
     return out;
   };
   const sameDay = value.day === base.day;
+  const selected = typeof value.selected === "number"
+    ? DEFAULT_DHIKRS[Math.min(DEFAULT_DHIKRS.length - 1, num(value.selected))]?.id ?? base.selected
+    : typeof value.selected === "string" && validIds.has(value.selected)
+      ? value.selected
+      : base.selected;
   return {
-    selected: Math.min(DHIKRS.length - 1, num(value.selected)),
+    selected,
+    customDhikrs,
     counts: cleanMap(value.counts),
     laps: cleanMap(value.laps),
     day: base.day,
@@ -60,6 +102,11 @@ export default function TasbihScreen() {
   const { colors } = useAppTheme();
   const [state, setState] = useState<TasbihState>(emptyState);
   const [ready, setReady] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newLabel, setNewLabel] = useState("");
+  const [newArabic, setNewArabic] = useState("");
+  const [newMeaning, setNewMeaning] = useState("");
+  const [newTarget, setNewTarget] = useState("");
   const stateRef = useRef(state);
   stateRef.current = state;
 
@@ -83,16 +130,18 @@ export default function TasbihScreen() {
     void AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state)).catch(() => {});
   }, [state, ready]);
 
-  const dhikr = DHIKRS[state.selected];
+  const items = useMemo(() => [...DEFAULT_DHIKRS, ...state.customDhikrs, COUNTER_ONLY], [state.customDhikrs]);
+  const dhikr = items.find((item) => item.id === state.selected) ?? DEFAULT_DHIKRS[0];
   const count = state.counts[dhikr.id] ?? 0;
   const laps = state.laps[dhikr.id] ?? 0;
-  const progress = Math.min(1, count / dhikr.target);
+  const progress = dhikr.target ? Math.min(1, count / dhikr.target) : 0;
 
   const increment = useCallback(() => {
     const current = stateRef.current;
-    const item = DHIKRS[current.selected];
+    const currentItems = [...DEFAULT_DHIKRS, ...current.customDhikrs, COUNTER_ONLY];
+    const item = currentItems.find((entry) => entry.id === current.selected) ?? DEFAULT_DHIKRS[0];
     const next = (current.counts[item.id] ?? 0) + 1;
-    const completed = next >= item.target;
+    const completed = item.target !== null && next >= item.target;
     if (Platform.OS !== "web") Vibration.vibrate(completed ? [0, 60, 60, 60] : 12);
     setState({
       ...current,
@@ -107,18 +156,86 @@ export default function TasbihScreen() {
     const doReset = () =>
       setState((current) => ({
         ...current,
-        counts: { ...current.counts, [DHIKRS[current.selected].id]: 0 },
-        laps: { ...current.laps, [DHIKRS[current.selected].id]: 0 },
+        counts: { ...current.counts, [current.selected]: 0 },
+        laps: { ...current.laps, [current.selected]: 0 },
       }));
     if (Platform.OS === "web") {
-      if (typeof window !== "undefined" && window.confirm("Remettre ce dhikr à zéro ?")) doReset();
+      if (typeof window !== "undefined" && window.confirm("Remettre ce compteur à zéro ?")) doReset();
       return;
     }
-    Alert.alert("Remettre à zéro ?", "Le compteur et les cycles de ce dhikr seront réinitialisés.", [
+    Alert.alert("Remettre à zéro ?", "Le compteur et les cycles de cette invocation seront réinitialisés.", [
       { text: "Annuler", style: "cancel" },
       { text: "Réinitialiser", style: "destructive", onPress: doReset },
     ]);
   }, []);
+
+  const addFavorite = useCallback(() => {
+    const label = newLabel.trim();
+    if (!label) {
+      if (Platform.OS === "web") {
+        if (typeof window !== "undefined") window.alert("Donne un nom à ton invocation pour l’enregistrer.");
+      } else {
+        Alert.alert("Nom manquant", "Donne un nom à ton invocation pour l’enregistrer.");
+      }
+      return;
+    }
+    const parsedTarget = newTarget.trim() ? Number.parseInt(newTarget.trim(), 10) : null;
+    if (newTarget.trim() && (!Number.isFinite(parsedTarget) || (parsedTarget ?? 0) < 1)) {
+      if (Platform.OS === "web") {
+        if (typeof window !== "undefined") window.alert("L’objectif doit être un nombre entier supérieur à zéro, ou rester vide.");
+      } else {
+        Alert.alert("Objectif invalide", "L’objectif doit être un nombre entier supérieur à zéro, ou rester vide.");
+      }
+      return;
+    }
+    const favorite: Dhikr = {
+      id: `custom-${Date.now()}`,
+      label,
+      arabic: newArabic.trim(),
+      meaning: newMeaning.trim(),
+      target: parsedTarget,
+      custom: true,
+    };
+    setState((current) => ({
+      ...current,
+      selected: favorite.id,
+      customDhikrs: [...current.customDhikrs, favorite],
+    }));
+    setNewLabel("");
+    setNewArabic("");
+    setNewMeaning("");
+    setNewTarget("");
+    setShowAddForm(false);
+  }, [newArabic, newLabel, newMeaning, newTarget]);
+
+  const deleteFavorite = useCallback((id: string) => {
+    const remove = () => setState((current) => ({
+      ...current,
+      selected: current.selected === id ? DEFAULT_DHIKRS[0].id : current.selected,
+      customDhikrs: current.customDhikrs.filter((item) => item.id !== id),
+      counts: Object.fromEntries(Object.entries(current.counts).filter(([key]) => key !== id)),
+      laps: Object.fromEntries(Object.entries(current.laps).filter(([key]) => key !== id)),
+    }));
+    if (Platform.OS === "web") {
+      if (typeof window !== "undefined" && window.confirm("Supprimer cette invocation favorite et son compteur ?")) remove();
+      return;
+    }
+    Alert.alert("Supprimer le favori ?", "Cette invocation et son compteur seront supprimés.", [
+      { text: "Annuler", style: "cancel" },
+      { text: "Supprimer", style: "destructive", onPress: remove },
+    ]);
+  }, []);
+
+  const inputStyle = {
+    color: colors.text,
+    backgroundColor: colors.surfaceAlt,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 13,
+    paddingVertical: 11,
+    fontSize: 14,
+  } as const;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={["top", "left", "right"]}>
@@ -128,48 +245,80 @@ export default function TasbihScreen() {
           <Text style={{ color: colors.primary, fontSize: 10, fontWeight: "900", letterSpacing: 1.8 }}>DHIKR</Text>
           <Text style={{ color: colors.text, fontSize: 30, fontWeight: "800" }}>Tasbih</Text>
           <Text style={{ color: colors.muted, lineHeight: 21 }}>
-            Un compteur simple pour tes invocations. Ta progression est enregistrée sur ton appareil.
+            Compte tes invocations favorites ou utilise le compteur seul. Tes favoris et ta progression restent enregistrés sur cet appareil.
           </Text>
         </View>
 
-        <View accessibilityRole="radiogroup" style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          {DHIKRS.map((item, index) => {
-            const selected = index === state.selected;
-            return (
-              <Pressable
-                key={item.id}
-                accessibilityRole="radio"
-                accessibilityState={{ selected }}
-                onPress={() => setState((current) => ({ ...current, selected: index }))}
-                style={{
-                  paddingVertical: 9,
-                  paddingHorizontal: 13,
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  backgroundColor: selected ? colors.primary : colors.surfaceAlt,
-                }}
-              >
-                <Text style={{ color: selected ? colors.primaryText : colors.text, fontSize: 12, fontWeight: "700" }}>{item.label}</Text>
+        <View style={{ gap: 9 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+            <Text style={{ color: colors.text, fontSize: 15, fontWeight: "800" }}>Invocations</Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setShowAddForm((visible) => !visible)}
+              style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 9, paddingHorizontal: 12, borderRadius: 12, backgroundColor: colors.primary }}
+            >
+              <Ionicons name={showAddForm ? "close" : "add"} size={18} color={colors.primaryText} />
+              <Text style={{ color: colors.primaryText, fontSize: 12, fontWeight: "800" }}>{showAddForm ? "Fermer" : "Ajouter un favori"}</Text>
+            </Pressable>
+          </View>
+
+          <View accessibilityRole="radiogroup" style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+            {items.map((item) => {
+              const selected = item.id === state.selected;
+              return (
+                <Pressable
+                  key={item.id}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected }}
+                  onPress={() => setState((current) => ({ ...current, selected: item.id }))}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 6,
+                    paddingVertical: 9,
+                    paddingHorizontal: 12,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: selected ? colors.primary : colors.border,
+                    backgroundColor: selected ? colors.primary : colors.surfaceAlt,
+                  }}
+                >
+                  <Text style={{ color: selected ? colors.primaryText : colors.text, fontSize: 12, fontWeight: "700" }}>{item.label}</Text>
+                  {item.custom ? <Ionicons name="heart" size={12} color={selected ? colors.primaryText : colors.primary} /> : null}
+                </Pressable>
+              );
+            })}
+          </View>
+
+          {showAddForm ? (
+            <View style={{ padding: 16, gap: 11, borderRadius: 18, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}>
+              <Text style={{ color: colors.text, fontSize: 16, fontWeight: "800" }}>Créer une invocation favorite</Text>
+              <Text style={{ color: colors.muted, fontSize: 12, lineHeight: 18 }}>Le nom est obligatoire. L’arabe, la traduction et l’objectif sont facultatifs. Sans objectif, le compteur continue sans se remettre à zéro.</Text>
+              <TextInput value={newLabel} onChangeText={setNewLabel} placeholder="Nom (ex. Mon dhikr)" placeholderTextColor={colors.muted} maxLength={60} style={inputStyle} returnKeyType="next" />
+              <TextInput value={newArabic} onChangeText={setNewArabic} placeholder="Texte arabe (facultatif)" placeholderTextColor={colors.muted} maxLength={240} style={[inputStyle, { textAlign: "right", fontSize: 20 }]} />
+              <TextInput value={newMeaning} onChangeText={setNewMeaning} placeholder="Traduction ou note (facultatif)" placeholderTextColor={colors.muted} maxLength={160} style={inputStyle} />
+              <TextInput value={newTarget} onChangeText={setNewTarget} placeholder="Objectif (ex. 33) — vide = compteur libre" placeholderTextColor={colors.muted} keyboardType="number-pad" maxLength={7} style={inputStyle} />
+              <Pressable accessibilityRole="button" onPress={addFavorite} style={{ alignItems: "center", justifyContent: "center", paddingVertical: 13, borderRadius: 12, backgroundColor: colors.primary }}>
+                <Text style={{ color: colors.primaryText, fontWeight: "800" }}>Enregistrer le favori</Text>
               </Pressable>
-            );
-          })}
+            </View>
+          ) : null}
         </View>
 
         <View style={{ backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, borderRadius: 24, padding: 22, alignItems: "center", gap: 14 }}>
-          <Text style={{ color: colors.text, fontSize: 30, lineHeight: 52, textAlign: "center" }}>{dhikr.arabic}</Text>
-          <Text style={{ color: colors.muted, fontSize: 13, textAlign: "center" }}>{dhikr.meaning}</Text>
+          {dhikr.arabic ? <Text style={{ color: colors.text, fontSize: 30, lineHeight: 52, textAlign: "center" }}>{dhikr.arabic}</Text> : null}
+          <Text style={{ color: colors.muted, fontSize: 13, textAlign: "center" }}>{dhikr.meaning || (dhikr.counterOnly ? "Compteur libre" : "Invocation favorite")}</Text>
 
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`Compter ${dhikr.label}. ${count} sur ${dhikr.target}`}
+            accessibilityLabel={dhikr.target ? `Compter ${dhikr.label}. ${count} sur ${dhikr.target}` : `Incrémenter le compteur. ${count}`}
             onPress={increment}
             style={({ pressed }) => ({
               width: 210,
               height: 210,
               borderRadius: 105,
               borderWidth: 8,
-              borderColor: progress >= 1 ? colors.success : colors.primary,
+              borderColor: dhikr.target && count >= dhikr.target ? colors.success : colors.primary,
               backgroundColor: colors.surfaceAlt,
               alignItems: "center",
               justifyContent: "center",
@@ -177,42 +326,54 @@ export default function TasbihScreen() {
             })}
           >
             <Text style={{ color: colors.text, fontSize: 60, fontWeight: "900", fontVariant: ["tabular-nums"] }}>{count}</Text>
-            <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>sur {dhikr.target}</Text>
+            <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "700" }}>{dhikr.target ? `sur ${dhikr.target}` : "appuie pour compter"}</Text>
           </Pressable>
 
-          <View style={{ width: "100%", height: 8, borderRadius: 4, backgroundColor: colors.surfaceAlt, overflow: "hidden" }}>
-            <View style={{ width: `${Math.round(progress * 100)}%`, height: 8, backgroundColor: colors.primary }} />
-          </View>
+          {dhikr.target ? (
+            <View style={{ width: "100%", height: 8, borderRadius: 4, backgroundColor: colors.surfaceAlt, overflow: "hidden" }}>
+              <View style={{ width: `${Math.round(progress * 100)}%`, height: 8, backgroundColor: colors.primary }} />
+            </View>
+          ) : null}
 
           <View style={{ flexDirection: "row", gap: 24 }}>
-            <View style={{ alignItems: "center" }}>
-              <Text style={{ color: colors.text, fontSize: 20, fontWeight: "800" }}>{laps}</Text>
-              <Text style={{ color: colors.muted, fontSize: 11 }}>cycles terminés</Text>
-            </View>
+            {dhikr.target ? (
+              <View style={{ alignItems: "center" }}>
+                <Text style={{ color: colors.text, fontSize: 20, fontWeight: "800" }}>{laps}</Text>
+                <Text style={{ color: colors.muted, fontSize: 11 }}>cycles terminés</Text>
+              </View>
+            ) : null}
             <View style={{ alignItems: "center" }}>
               <Text style={{ color: colors.text, fontSize: 20, fontWeight: "800" }}>{state.today}</Text>
               <Text style={{ color: colors.muted, fontSize: 11 }}>aujourd’hui</Text>
             </View>
           </View>
 
-          <Pressable
-            accessibilityRole="button"
-            onPress={resetCurrent}
-            style={({ pressed }) => ({
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 8,
-              paddingVertical: 11,
-              paddingHorizontal: 18,
-              borderRadius: 14,
-              borderWidth: 1,
-              borderColor: colors.border,
-              opacity: pressed ? 0.7 : 1,
-            })}
-          >
-            <Ionicons name="refresh-outline" size={18} color={colors.text} />
-            <Text style={{ color: colors.text, fontWeight: "700" }}>Remettre à zéro</Text>
-          </Pressable>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", flexWrap: "wrap", gap: 10 }}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={resetCurrent}
+              style={({ pressed }) => ({
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 8,
+                paddingVertical: 11,
+                paddingHorizontal: 18,
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: colors.border,
+                opacity: pressed ? 0.7 : 1,
+              })}
+            >
+              <Ionicons name="refresh-outline" size={18} color={colors.text} />
+              <Text style={{ color: colors.text, fontWeight: "700" }}>Remettre à zéro</Text>
+            </Pressable>
+            {dhikr.custom ? (
+              <Pressable accessibilityRole="button" onPress={() => deleteFavorite(dhikr.id)} style={{ flexDirection: "row", alignItems: "center", gap: 7, paddingVertical: 11, paddingHorizontal: 15, borderRadius: 14, borderWidth: 1, borderColor: colors.danger ?? colors.border }}>
+                <Ionicons name="trash-outline" size={17} color={colors.danger ?? colors.text} />
+                <Text style={{ color: colors.danger ?? colors.text, fontWeight: "700" }}>Supprimer le favori</Text>
+              </Pressable>
+            ) : null}
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
