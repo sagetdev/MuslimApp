@@ -1,9 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { ScrollView, Text, View, Pressable } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import BackButton from "../src/components/BackButton";
+import BackButton from "../components/BackButton";
 import { useAppTheme } from "../src/theme/ThemeProvider";
 
 type EventProfile = {
@@ -91,7 +91,7 @@ function profileForEvent(title: string): EventProfile {
   };
 }
 
-function InfoSection({ title, icon, children, colors }: { title: string; icon: keyof typeof Ionicons.glyphMap; children: React.ReactNode; colors: ReturnType<typeof useAppTheme>["colors"] }) {
+function InfoSection({ title, icon, children, colors }: { title: string; icon: keyof typeof Ionicons.glyphMap; children: ReactNode; colors: ReturnType<typeof useAppTheme>["colors"] }) {
   return (
     <View style={{ padding: 17, gap: 12, borderRadius: 20, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 9 }}>
