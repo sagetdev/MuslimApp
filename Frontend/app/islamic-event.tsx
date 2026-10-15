@@ -60,7 +60,7 @@ async function loadEncyclopediaSummary(title: string): Promise<EncyclopediaSumma
   const cached = encyclopediaCache.get(title);
   if (cached) return cached;
   const frenchTitle = wikipediaArticleForEvent(title);
-  const normalized = title.toLocaleLowerCase("fr").normalize("NFD").replace(/[\\u0300-\\u036f]/g, "");
+  const normalized = title.toLocaleLowerCase("fr").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   const englishTitle = normalized.includes("ramadan") ? "Ramadan"
     : normalized.includes("fitr") ? "Eid al-Fitr"
     : normalized.includes("adha") || normalized.includes("ad-ha") || normalized.includes("sacrifice") ? "Eid al-Adha"
