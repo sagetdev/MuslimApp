@@ -16,6 +16,8 @@ import {
   getText,
   getId,
   getTitle,
+  getArabic,
+  getMeaning,
   labelFor,
   slugFor,
   categoryIconFor,
