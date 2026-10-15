@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import type { ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useAppTheme } from "../src/theme/ThemeProvider";
 import {
@@ -13,6 +13,7 @@ import {
   buildHadith,
   buildName,
 } from "./resource.utils";
+import { readDuaFavorites, removeDuaFavorite, saveDuaFavorite, toDuaFavorite } from "../src/lib/duaFavorites";
 
 function Chip({ icon, label }: { icon: keyof typeof Ionicons.glyphMap; label: string }) {
   const { colors } = useAppTheme();
@@ -177,6 +178,57 @@ function NameDetail({ item, onClose, onPrevious, onNext }: DetailBaseProps) {
   );
 }
 
+function DuaFavoriteButton({ item, category }: { item: RecordValue; category?: string }) {
+  const { colors } = useAppTheme();
+  const [saved, setSaved] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const favorite = toDuaFavorite(item, category);
+
+  useEffect(() => {
+    let active = true;
+    void readDuaFavorites().then((favorites) => {
+      if (active) setSaved(favorites.some((entry) => entry.id === favorite.id));
+    });
+    return () => {
+      active = false;
+    };
+  }, [favorite.id]);
+
+  const toggle = useCallback(async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      if (saved) {
+        await removeDuaFavorite(favorite.id);
+        setSaved(false);
+      } else {
+        await saveDuaFavorite(item, category);
+        setSaved(true);
+      }
+    } catch {
+      // Keep the previous UI state if device storage is unavailable.
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, saved, favorite.id, item, category]);
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={saved ? "Retirer des invocations favorites" : "Ajouter aux invocations favorites"}
+      accessibilityState={{ selected: saved, disabled: busy }}
+      disabled={busy}
+      onPress={() => void toggle()}
+      style={{ alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 14, paddingHorizontal: 13, paddingVertical: 10, backgroundColor: saved ? colors.primary : colors.surfaceAlt, opacity: busy ? 0.65 : 1 }}
+    >
+      <Ionicons name={saved ? "heart" : "heart-outline"} size={17} color={saved ? colors.primaryText : colors.primary} />
+      <Text style={{ color: saved ? colors.primaryText : colors.primary, fontSize: 12, fontWeight: "800" }}>
+        {saved ? "Enregistrée dans mes favoris" : "Ajouter aux favoris"}
+      </Text>
+    </Pressable>
+  );
+}
+
 function DuaDetail({ item, kind, category, onClose, onPrevious, onNext }: {
   item: RecordValue;
   kind: ResourceKind;
@@ -210,6 +262,7 @@ function DuaDetail({ item, kind, category, onClose, onPrevious, onNext }: {
           <Ionicons name="close" size={20} color={colors.muted} />
         </Pressable>
       </View>
+      {kind === "duas" ? <DuaFavoriteButton item={item} category={category} /> : null}
       {kind === "duas" && categoryLabel ? (
         <View style={{ flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 7, borderRadius: 14, paddingHorizontal: 11, paddingVertical: 8, backgroundColor: colors.surfaceAlt }}>
           <Ionicons name="pricetag-outline" size={15} color={colors.primary} />
