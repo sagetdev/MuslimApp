@@ -13,6 +13,84 @@ type EncyclopediaSummary = {
   pageUrl: string;
 };
 
+const encyclopediaCache = new Map<string, EncyclopediaSummary>();
+
+type WikipediaSummaryResponse = {
+  title?: unknown;
+  extract?: unknown;
+  content_urls?: { desktop?: { page?: unknown } };
+};
+
+async function fetchJsonWithTimeout(url: string, timeoutMs = 7000): Promise<unknown> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { headers: { Accept: "application/json" }, signal: controller.signal });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function parseWikipediaSummary(data: unknown, fallbackTitle: string, language: "fr" | "en"): EncyclopediaSummary | null {
+  if (!data || typeof data !== "object") return null;
+  const value = data as WikipediaSummaryResponse;
+  const extract = typeof value.extract === "string" ? value.extract.trim() : "";
+  const pageUrl = typeof value.content_urls?.desktop?.page === "string"
+    ? value.content_urls.desktop.page
+    : typeof value.title === "string"
+      ? `https://${language}.wikipedia.org/wiki/${encodeURIComponent(value.title.replace(/ /g, "_"))}`
+      : "";
+  if (!extract || !pageUrl) return null;
+  return { title: typeof value.title === "string" ? value.title : fallbackTitle, extract, pageUrl };
+}
+
+async function searchWikipediaSummary(query: string, language: "fr" | "en"): Promise<EncyclopediaSummary | null> {
+  const searchUrl = `https://${language}.wikipedia.org/w/api.php?action=query&list=search&format=json&srlimit=1&srsearch=${encodeURIComponent(query)}`;
+  const searchData = await fetchJsonWithTimeout(searchUrl);
+  if (!searchData || typeof searchData !== "object") return null;
+  const articleTitle = (searchData as { query?: { search?: Array<{ title?: unknown }> } }).query?.search?.[0]?.title;
+  if (typeof articleTitle !== "string" || !articleTitle.trim()) return null;
+  const summary = await fetchJsonWithTimeout(`https://${language}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(articleTitle)}`);
+  return parseWikipediaSummary(summary, articleTitle, language);
+}
+
+async function loadEncyclopediaSummary(title: string): Promise<EncyclopediaSummary> {
+  const cached = encyclopediaCache.get(title);
+  if (cached) return cached;
+  const frenchTitle = wikipediaArticleForEvent(title);
+  const normalized = title.toLocaleLowerCase("fr").normalize("NFD").replace(/[\\u0300-\\u036f]/g, "");
+  const englishTitle = normalized.includes("ramadan") ? "Ramadan"
+    : normalized.includes("fitr") ? "Eid al-Fitr"
+    : normalized.includes("adha") || normalized.includes("ad-ha") || normalized.includes("sacrifice") ? "Eid al-Adha"
+    : normalized.includes("ashura") || normalized.includes("achoura") ? "Ashura"
+    : normalized.includes("mawlid") || normalized.includes("naissance du prophete") || normalized.includes("prophète") ? "Mawlid"
+    : normalized.includes("laylat") || normalized.includes("nuit du destin") || normalized.includes("qadr") ? "Laylat al-Qadr"
+    : normalized.includes("arafa") || normalized.includes("arafat") ? "Day of Arafah"
+    : normalized.includes("hijri") || normalized.includes("nouvel an") || normalized.includes("mouharram") || normalized.includes("muharram") ? "Islamic New Year"
+    : title;
+
+  const attempts: Array<() => Promise<EncyclopediaSummary | null>> = [
+    async () => parseWikipediaSummary(await fetchJsonWithTimeout(`https://fr.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(frenchTitle)}`), frenchTitle, "fr"),
+    () => searchWikipediaSummary(frenchTitle, "fr"),
+    async () => parseWikipediaSummary(await fetchJsonWithTimeout(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(englishTitle)}`), englishTitle, "en"),
+    () => searchWikipediaSummary(englishTitle, "en"),
+  ];
+  for (const attempt of attempts) {
+    try {
+      const result = await attempt();
+      if (result) {
+        encyclopediaCache.set(title, result);
+        return result;
+      }
+    } catch {
+      // Essaie la source ou la stratégie suivante.
+    }
+  }
+  throw new Error("Aucun résumé encyclopédique n’a pu être récupéré. Vérifie ta connexion ou consulte les explications ci-dessous.");
+}
+
 function wikipediaArticleForEvent(title: string): string {
   const value = title.toLocaleLowerCase("fr").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   if (value.includes("ramadan")) return "Ramadan";
@@ -142,37 +220,18 @@ export default function IslamicEventScreen() {
 
   useEffect(() => {
     let active = true;
-    const articleTitle = wikipediaArticleForEvent(title);
     setEncyclopedia(null);
     setEncyclopediaError("");
     setEncyclopediaLoading(true);
-
-    fetch(`https://fr.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(articleTitle)}`, {
-      headers: { Accept: "application/json" },
-    })
-      .then(async (response) => {
-        if (!response.ok) throw new Error("Aucun article encyclopédique disponible pour cet événement.");
-        return response.json();
-      })
-      .then((data: { title?: unknown; extract?: unknown; content_urls?: { desktop?: { page?: unknown } } }) => {
-        const extract = typeof data.extract === "string" ? data.extract.trim() : "";
-        const pageUrl = typeof data.content_urls?.desktop?.page === "string" ? data.content_urls.desktop.page : "";
-        if (!extract || !pageUrl) throw new Error("L’article ne contient pas de résumé exploitable.");
-        if (active) setEncyclopedia({
-          title: typeof data.title === "string" ? data.title : articleTitle,
-          extract,
-          pageUrl,
-        });
-      })
+    void loadEncyclopediaSummary(title)
+      .then((result) => { if (active) setEncyclopedia(result); })
       .catch((error: unknown) => {
-        if (active) setEncyclopediaError(error instanceof Error ? error.message : "L’article n’a pas pu être chargé.");
+        if (active) setEncyclopediaError(error instanceof Error ? error.message : "Les sources externes sont momentanément indisponibles.");
       })
-      .finally(() => {
-        if (active) setEncyclopediaLoading(false);
-      });
-
+      .finally(() => { if (active) setEncyclopediaLoading(false); });
     return () => { active = false; };
   }, [title]);
+
   const gregorianDate = typeof params.gregorianDate === "string" ? params.gregorianDate : "";
   const hijriDay = typeof params.hijriDay === "string" ? params.hijriDay : "";
   const hijriMonth = typeof params.hijriMonth === "string" ? params.hijriMonth : "";
