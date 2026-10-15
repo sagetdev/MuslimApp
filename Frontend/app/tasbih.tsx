@@ -162,7 +162,7 @@ export default function TasbihScreen() {
     target: favorite.target,
     favorite: true,
   })), [duaFavorites]);
-  const items = useMemo(() => [...favoriteDhikrs, ...state.customDhikrs, COUNTER_ONLY, ...DEFAULT_DHIKRS], [favoriteDhikrs, state.customDhikrs]);
+  const items = useMemo(() => [...favoriteDhikrs, ...state.customDhikrs, COUNTER_ONLY], [favoriteDhikrs, state.customDhikrs]);
   const dhikr = items.find((item) => item.id === state.selected) ?? favoriteDhikrs[0] ?? COUNTER_ONLY;
   const count = state.counts[dhikr.id] ?? 0;
   const laps = state.laps[dhikr.id] ?? 0;
@@ -358,14 +358,14 @@ export default function TasbihScreen() {
 
           {showAddForm && showAdvanced ? (
             <View style={{ padding: 16, gap: 11, borderRadius: 18, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}>
-              <Text style={{ color: colors.text, fontSize: 16, fontWeight: "800" }}>Créer une invocation favorite</Text>
+              <Text style={{ color: colors.text, fontSize: 16, fontWeight: "800" }}>Créer une invocation personnalisée</Text>
               <Text style={{ color: colors.muted, fontSize: 12, lineHeight: 18 }}>Le nom est obligatoire. L’arabe, la traduction et l’objectif sont facultatifs. Sans objectif, le compteur continue sans se remettre à zéro.</Text>
               <TextInput value={newLabel} onChangeText={setNewLabel} placeholder="Nom (ex. Mon dhikr)" placeholderTextColor={colors.muted} maxLength={60} style={inputStyle} returnKeyType="next" />
               <TextInput value={newArabic} onChangeText={setNewArabic} placeholder="Texte arabe (facultatif)" placeholderTextColor={colors.muted} maxLength={240} style={[inputStyle, { textAlign: "right", fontSize: 20 }]} />
               <TextInput value={newMeaning} onChangeText={setNewMeaning} placeholder="Traduction ou note (facultatif)" placeholderTextColor={colors.muted} maxLength={160} style={inputStyle} />
               <TextInput value={newTarget} onChangeText={setNewTarget} placeholder="Objectif (ex. 33) — vide = compteur libre" placeholderTextColor={colors.muted} keyboardType="number-pad" maxLength={7} style={inputStyle} />
               <Pressable accessibilityRole="button" onPress={addFavorite} style={{ alignItems: "center", justifyContent: "center", paddingVertical: 13, borderRadius: 12, backgroundColor: colors.primary }}>
-                <Text style={{ color: colors.primaryText, fontWeight: "800" }}>Enregistrer le favori</Text>
+                <Text style={{ color: colors.primaryText, fontWeight: "800" }}>Enregistrer l’invocation</Text>
               </Pressable>
             </View>
           ) : null}
@@ -437,7 +437,7 @@ export default function TasbihScreen() {
             {dhikr.custom ? (
               <Pressable accessibilityRole="button" onPress={() => deleteFavorite(dhikr.id)} style={{ flexDirection: "row", alignItems: "center", gap: 7, paddingVertical: 11, paddingHorizontal: 15, borderRadius: 14, borderWidth: 1, borderColor: colors.danger ?? colors.border }}>
                 <Ionicons name="trash-outline" size={17} color={colors.danger ?? colors.text} />
-                <Text style={{ color: colors.danger ?? colors.text, fontWeight: "700" }}>Supprimer le favori</Text>
+                <Text style={{ color: colors.danger ?? colors.text, fontWeight: "700" }}>Supprimer l’invocation</Text>
               </Pressable>
             ) : null}
           </View>
