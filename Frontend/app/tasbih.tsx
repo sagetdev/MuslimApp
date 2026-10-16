@@ -208,15 +208,16 @@ export default function TasbihScreen() {
 
   const addFavorite = useCallback(() => {
     const label = newLabel.trim();
-    if (!label) {
+    const parsedTarget = newTarget.trim() ? Number.parseInt(newTarget.trim(), 10) : null;
+    if (!label && !newTarget.trim()) {
+      const message = "Donne un nom à ton invocation ou indique un objectif de répétitions.";
       if (Platform.OS === "web") {
-        if (typeof window !== "undefined") window.alert("Donne un nom à ton invocation pour l’enregistrer.");
+        if (typeof window !== "undefined") window.alert(message);
       } else {
-        Alert.alert("Nom manquant", "Donne un nom à ton invocation pour l’enregistrer.");
+        Alert.alert("Informations manquantes", message);
       }
       return;
     }
-    const parsedTarget = newTarget.trim() ? Number.parseInt(newTarget.trim(), 10) : null;
     if (newTarget.trim() && (!Number.isFinite(parsedTarget) || (parsedTarget ?? 0) < 1)) {
       if (Platform.OS === "web") {
         if (typeof window !== "undefined") window.alert("L’objectif doit être un nombre entier supérieur à zéro, ou rester vide.");
@@ -227,7 +228,7 @@ export default function TasbihScreen() {
     }
     const favorite: Dhikr = {
       id: `custom-${Date.now()}`,
-      label,
+      label: label || `Autre · ${parsedTarget}`,
       arabic: newArabic.trim(),
       meaning: newMeaning.trim(),
       target: parsedTarget,
@@ -360,8 +361,8 @@ export default function TasbihScreen() {
           {showAddForm && showAdvanced ? (
             <View style={{ padding: 16, gap: 11, borderRadius: 18, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}>
               <Text style={{ color: colors.text, fontSize: 16, fontWeight: "800" }}>Créer une invocation personnalisée</Text>
-              <Text style={{ color: colors.muted, fontSize: 12, lineHeight: 18 }}>Le nom est obligatoire. L’arabe, la traduction et l’objectif sont facultatifs. Sans objectif, le compteur continue sans se remettre à zéro.</Text>
-              <TextInput value={newLabel} onChangeText={setNewLabel} placeholder="Nom (ex. Mon dhikr)" placeholderTextColor={colors.muted} maxLength={60} style={inputStyle} returnKeyType="next" />
+              <Text style={{ color: colors.muted, fontSize: 12, lineHeight: 18 }}>Crée autant de compteurs que tu veux. Pour un objectif personnalisé, saisis simplement le nombre de répétitions : le compteur sera enregistré sous « Autre · nombre ». Tu peux aussi donner un nom et laisser l’objectif vide pour compter librement.</Text>
+              <TextInput value={newLabel} onChangeText={setNewLabel} placeholder="Nom (facultatif si objectif rempli)" placeholderTextColor={colors.muted} maxLength={60} style={inputStyle} returnKeyType="next" />
               <TextInput value={newArabic} onChangeText={setNewArabic} placeholder="Texte arabe (facultatif)" placeholderTextColor={colors.muted} maxLength={240} style={[inputStyle, { textAlign: "right", fontSize: 20 }]} />
               <TextInput value={newMeaning} onChangeText={setNewMeaning} placeholder="Traduction ou note (facultatif)" placeholderTextColor={colors.muted} maxLength={160} style={inputStyle} />
               <TextInput value={newTarget} onChangeText={setNewTarget} placeholder="Objectif (ex. 33) — vide = compteur libre" placeholderTextColor={colors.muted} keyboardType="number-pad" maxLength={7} style={inputStyle} />
