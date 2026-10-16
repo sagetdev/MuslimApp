@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { loadHafsFont, loadPageFont, pageFont, setFontPriority } from "../src/lib/quranFonts";
+import { getOfflinePage } from "../src/lib/quranOffline";
 import Slider from "@react-native-community/slider";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -16,6 +17,8 @@ import { getSurahForPage, TOTAL_PAGES } from "../src/data/pageToSurah";
 import { apiFetch } from "../src/lib/api";
 import createQuranStyles from "../src/styles/quran.styles";
 import { useAppTheme } from "../src/theme/ThemeProvider";
+import { pageToVerse } from "../src/lib/verseToPage";
+import { saveProgress } from "../src/lib/quranProgress";
 
 type Word = { code: string | null; text: string | null; kind: "word" | "end"; page: number };
 type Line = { number: number; words: Word[] };
@@ -30,14 +33,18 @@ const ALL_PAGES = Array.from({ length: TOTAL_PAGES }, (_, i) => i + 1);
 type Props = {
   initialPage?: number;
   onClose?: () => void;
+  onPageChange?: (page: number) => void;
+  offline?: boolean;
 };
 
 function MushafPageItem({
   page,
   containerWidth,
+  offline,
 }: {
   page: number;
   containerWidth: number;
+  offline: boolean;
 }) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createQuranStyles(colors), [colors]);
@@ -61,9 +68,11 @@ function MushafPageItem({
         (async () => {
         try {
             const [response] = await Promise.all([
-            apiFetch<{ data: MushafPageData }>(`/mushaf/pages/${page}`, {
-                priority: "high",
-            }),
+            offline
+              ? getOfflinePage<{ data: MushafPageData }>(page)
+              : apiFetch<{ data: MushafPageData }>(`/mushaf/pages/${page}`, {
+                  priority: "high",
+                }),
             loadHafsFont(),
             loadPageFont(page),
             ]);
@@ -91,7 +100,7 @@ function MushafPageItem({
         return () => {
         active = false;
         };
-    }, [page, reloadKey]);
+    }, [page, reloadKey, offline]);
 
   // Nom de la sourate (issu du banner si présent, sinon null)
   const pageSurahName = useMemo(() => {
@@ -255,7 +264,7 @@ function MushafPageItem({
   );
 }
 
-export default function QuranPage({ initialPage = 1, onClose }: Props) {
+export default function QuranPage({ initialPage = 1, onClose, offline = false, onPageChange }: Props) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createQuranStyles(colors), [colors]);
   const { width } = useWindowDimensions();
@@ -263,10 +272,30 @@ export default function QuranPage({ initialPage = 1, onClose }: Props) {
 
   const flatListRef = useRef<FlatList>(null);
 
+  // Ignore les événements de visibilité du tout début (avant le scroll vers la page initiale).
+  const settled = useRef(false);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      settled.current = true;
+    }, 600);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (settled.current) {
+      onPageChange?.(currentPage);
+      const { surah, verse } = pageToVerse(currentPage);
+      saveProgress({ mode: "pages", page: currentPage, surah, verse });
+    }
+  }, [currentPage, onPageChange]);
+
   const onViewableItemsChanged = useCallback(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
       if (viewableItems.length > 0 && viewableItems[0].item) {
-        setCurrentPage(viewableItems[0].item as number);
+        const page = viewableItems[0].item as number;
+        setCurrentPage(page);
+        const { surah, verse } = pageToVerse(page);
+        saveProgress({ mode: "pages", page, surah, verse });
       }
     },
     []
@@ -287,6 +316,8 @@ export default function QuranPage({ initialPage = 1, onClose }: Props) {
     if (flatListRef.current && index >= 0 && index < TOTAL_PAGES) {
       flatListRef.current.scrollToIndex({ index, animated: false });
     }
+    const { surah, verse } = pageToVerse(page);
+    saveProgress({ mode: "pages", page, surah, verse });
   }, []);
 
   // Numéro de la sourate actuelle, calculé à partir de la page courante
@@ -348,7 +379,7 @@ export default function QuranPage({ initialPage = 1, onClose }: Props) {
         })}
         keyExtractor={(item) => String(item)}
         renderItem={({ item }) => (
-          <MushafPageItem page={item} containerWidth={width} />
+          <MushafPageItem page={item} containerWidth={width} offline={offline} />
         )}
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}

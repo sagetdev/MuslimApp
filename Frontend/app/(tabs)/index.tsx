@@ -1,9 +1,10 @@
-
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import * as Location from "expo-location";
 import { apiFetch } from "../../src/lib/api";
+import { loadPrayerPrefs } from "../../src/lib/prayerPrefs";
+import { loadProgress } from "../../src/lib/quranProgress";
 import {
   Pressable,
   ScrollView,
@@ -13,6 +14,23 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAppTheme } from "../../src/theme/ThemeProvider";
 import createHomeStyles from "@/src/styles/home.styles";
+
+const SURAH_NAMES = [
+  "Al-Fatiha", "Al-Baqara", "Ali 'Imran", "An-Nisa", "Al-Ma'idah", "Al-An'am", "Al-A'raf", "Al-Anfal", "At-Tawbah", "Yunus",
+  "Hud", "Yusuf", "Ar-Ra'd", "Ibrahim", "Al-Hijr", "An-Nahl", "Al-Isra", "Al-Kahf", "Maryam", "Ta-Ha",
+  "Al-Anbiya", "Al-Hajj", "Al-Mu'minun", "An-Nur", "Al-Furqan", "Ash-Shu'ara", "An-Naml", "Al-Qasas", "Al-Ankabut", "Ar-Rum",
+  "Luqman", "As-Sajdah", "Al-Ahzab", "Saba", "Fatir", "Ya-Sin", "As-Saffat", "Sad", "Az-Zumar", "Ghafir",
+  "Fussilat", "Ash-Shura", "Az-Zukhruf", "Ad-Dukhan", "Al-Jathiyah", "Al-Ahqaf", "Muhammad", "Al-Fath", "Al-Hujurat", "Qaf",
+  "Adh-Dhariyat", "At-Tur", "An-Najm", "Al-Qamar", "Ar-Rahman", "Al-Waqi'ah", "Al-Hadid", "Al-Mujadila", "Al-Hashr", "Al-Mumtahanah",
+  "As-Saff", "Al-Jumu'ah", "Al-Munafiqun", "At-Taghabun", "At-Talaq", "At-Tahrim", "Al-Mulk", "Al-Qalam", "Al-Haqqah", "Al-Ma'arij",
+  "Nuh", "Al-Jinn", "Al-Muzzammil", "Al-Muddaththir", "Al-Qiyamah", "Al-Insan", "Al-Mursalat", "An-Naba", "An-Nazi'at", "Abasa",
+  "At-Takwir", "Al-Infitar", "Al-Mutaffifin", "Al-Inshiqaq", "Al-Buruj", "At-Tariq", "Al-A'la", "Al-Ghashiyah", "Al-Fajr", "Al-Balad",
+  "Ash-Shams", "Al-Layl", "Ad-Duha", "Ash-Sharh", "At-Tin", "Al-Alaq", "Al-Qadr", "Al-Bayyinah", "Az-Zalzalah", "Al-Adiyat",
+  "Al-Qari'ah", "At-Takathur", "Al-Asr", "Al-Humazah", "Al-Fil", "Quraysh", "Al-Ma'un", "Al-Kawthar", "Al-Kafirun", "An-Nasr",
+  "Al-Masad", "Al-Ikhlas", "Al-Falaq", "An-Nas",
+] as const;
+
+type LastRead = { surah: number; verse: number };
 
 const features = [
   {
@@ -49,6 +67,18 @@ const features = [
     title: "99 noms d'Allah",
     subtitle: "Asma ul Husna",
     icon: "flower-outline" as const,
+    route: "/explore",
+  },
+  {
+    title: "Tasbih",
+    subtitle: "Compteur de dhikr",
+    icon: "radio-button-on-outline" as const,
+    route: "/explore",
+  },
+  {
+    title: "Calendrier",
+    subtitle: "Date hégirienne",
+    icon: "calendar-outline" as const,
     route: "/explore",
   },
 ];
@@ -117,6 +147,22 @@ export default function DashboardScreen() {
   const [prayerTimes, setPrayerTimes] = useState<Prayer[]>(initialPrayerTimes);
   const [prayerStatus, setPrayerStatus] = useState("Chargement des horaires...");
   const [hijriDate, setHijriDate] = useState<string | null>(null);
+  const [lastRead, setLastRead] = useState<LastRead | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+
+      // Lire la même progression que le lecteur, et la rafraîchir à chaque retour à l'accueil.
+      void loadProgress().then((saved) => {
+        if (active) setLastRead({ surah: saved.surah, verse: saved.verse });
+      });
+
+      return () => {
+        active = false;
+      };
+    }, [])
+  );
 
   useEffect(() => {
     let mounted = true;
@@ -128,15 +174,18 @@ export default function DashboardScreen() {
           throw new Error("Autorise la localisation pour afficher les horaires locaux.");
         }
 
-        const position = await Location.getCurrentPositionAsync({});
+        const [position, prefs] = await Promise.all([
+          Location.getCurrentPositionAsync({}),
+          loadPrayerPrefs(),
+        ]);
         const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
         const response = await apiFetch<unknown>("/prayer-times", {
           params: {
             lat: position.coords.latitude,
             lng: position.coords.longitude,
             timezone,
-            method: "MWL",
-            madhab: "shafi",
+            method: prefs.method,
+            madhab: prefs.madhab,
             highLatitudeRule: "seventhofthenight",
           },
         });
@@ -185,16 +234,18 @@ export default function DashboardScreen() {
   }).format(new Date());
 
   function openFeature(title: string) {
-    const moduleByTitle: Record<string, string> = {
-      "Le Coran": "quran",
-      Horaires: "prayer",
-      "Horaires de prière": "prayer",
-      Qibla: "qibla",
-      Hadiths: "hadith",
-      Invocations: "duas",
-      "99 noms d'Allah": "names",
+    const routeByTitle: Record<string, "/quran-reader" | "/prayer" | "/qibla" | "/adhkar" | "/hadith" | "/names" | "/tasbih" | "/hijri" | "/explore"> = {
+      "Le Coran": "/quran-reader",
+      Horaires: "/prayer",
+      "Horaires de prière": "/prayer",
+      Qibla: "/qibla",
+      Hadiths: "/hadith",
+      Invocations: "/adhkar",
+      "99 noms d'Allah": "/names",
+      Tasbih: "/tasbih",
+      Calendrier: "/hijri",
     };
-    router.push({ pathname: "/explore", params: { module: moduleByTitle[title] ?? "quran" } });
+    router.push(routeByTitle[title] ?? "/explore");
   }
 
   return (
@@ -226,9 +277,16 @@ export default function DashboardScreen() {
             </View>
 
             <Pressable
-              accessibilityLabel="Changer de thème"
-              onPress={toggleTheme}
-              style={styles.themeButton}
+              accessibilityRole="button"
+              accessibilityLabel={mode === "dark" ? "Activer le thème clair" : "Activer le thème sombre"}
+              accessibilityHint="Change immédiatement les couleurs de l’application et mémorise ton choix."
+              accessibilityState={{ selected: mode === "light" }}
+              hitSlop={8}
+              onPress={() => toggleTheme()}
+              style={({ pressed }) => [
+                styles.themeButton,
+                pressed && styles.pressed,
+              ]}
             >
               <Ionicons
                 name={mode === "dark" ? "sunny-outline" : "moon-outline"}
@@ -328,7 +386,7 @@ export default function DashboardScreen() {
           </View>
 
           <Pressable
-            onPress={() => router.push("/quran/1")}
+            onPress={() => router.push(lastRead ? { pathname: "/quran-reader", params: { surah: String(lastRead.surah), verse: String(lastRead.verse) } } : "/quran-reader")}
             style={({ pressed }) => [
               styles.quranCard,
               pressed && styles.pressed,
@@ -344,9 +402,13 @@ export default function DashboardScreen() {
 
             <View style={styles.quranText}>
               <Text style={styles.quranEyebrow}>LE SAINT CORAN</Text>
-              <Text style={styles.quranTitle}>Al-Fatiha</Text>
+              <Text style={styles.quranTitle}>
+                {lastRead ? SURAH_NAMES[lastRead.surah - 1] : "Commencer la lecture"}
+              </Text>
               <Text style={styles.quranSubtitle}>
-                Sourate 1 · 7 versets
+                {lastRead
+                  ? `Sourate ${lastRead.surah} · Verset ${lastRead.verse}`
+                  : "Le Coran · 114 sourates"}
               </Text>
             </View>
 

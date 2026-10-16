@@ -7,7 +7,9 @@
     "@expo/vector-icons": "^15.0.2",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/slider": "5.2.0",
+    "adhan": "^4.4.6",
     "expo": "~57.0.27",
+    "expo-asset": "~57.0.20",
     "expo-constants": "~57.0.21",
     "expo-file-system": "~57.0.7",
     "expo-font": "~57.0.4",
@@ -30,11 +32,13 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
+    "quran-meta": "^7.0.0",
+    "tsx": "^4.20.6",
     "typescript": "~6.0.3"
   },
   "scripts": {
     "quran:assets": "tsx --env-file=.env scripts/fetch-quran-assets.mts",
-    "postinstall": "npm run quran:assets || exit 0",
+    "postinstall": "npm run quran:assets",
     "start": "npm run quran:assets && expo start",
     "android": "npm run quran:assets && expo start --android",
     "ios": "npm run quran:assets && expo start --ios",

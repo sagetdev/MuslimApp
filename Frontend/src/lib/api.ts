@@ -31,10 +31,18 @@ type ApiFetchOptions = {
 };
 
 function getApiUrl(): string {
-  if (!API_URL) {
-    throw new Error("EXPO_PUBLIC_API_URL est manquant dans le fichier .env");
+  if (API_URL) return API_URL.replace(/\/+$/, "");
+
+  // Version web servie par le même serveur que l'API : on utilise la même origine.
+  if (
+    typeof window !== "undefined" &&
+    typeof window.location !== "undefined" &&
+    /^https?:/.test(window.location.origin)
+  ) {
+    return `${window.location.origin}/api`;
   }
-  return API_URL.replace(/\/+$/, "");
+
+  throw new Error("EXPO_PUBLIC_API_URL est manquant dans le fichier .env");
 }
 
 function parseMushafPage(endpoint: string): number | null {
@@ -182,9 +190,21 @@ export async function apiFetch<T = unknown>(
         const responseText = await response.text().catch(() => "");
         let message = responseText;
         try {
-          const parsed = JSON.parse(responseText);
+          const parsed = JSON.parse(responseText) as Record<string, unknown>;
+          const nestedError =
+            parsed.error && typeof parsed.error === "object"
+              ? (parsed.error as Record<string, unknown>)
+              : undefined;
+          const candidate =
+            parsed.message ??
+            parsed.detail ??
+            nestedError?.message ??
+            (typeof parsed.error === "string" ? parsed.error : undefined) ??
+            responseText;
           message =
-            parsed.message ?? parsed.error ?? parsed.detail ?? responseText;
+            typeof candidate === "string"
+              ? candidate
+              : JSON.stringify(candidate);
         } catch {}
         throw new Error(
           `Erreur API ${response.status}${message ? ` : ${message}` : ""}`
@@ -212,7 +232,11 @@ export async function apiFetch<T = unknown>(
   // Déduplication : on enregistre la promesse pour les GET
   if (method === "GET") {
     inflight.set(dedupKey, task);
-    task.finally(() => inflight.delete(dedupKey));
+    // Do not create an ignored rejected promise: `finally` would surface an unhandled rejection.
+    void task.then(
+      () => inflight.delete(dedupKey),
+      () => inflight.delete(dedupKey)
+    );
   }
   
   if (__DEV__) {

@@ -1,6 +1,7 @@
 import path from "node:path";
 import express from "express";
 import cors from "cors";
+import compression from "compression";
 import { env } from "./config/env.js";
 import { errorHandler } from "./middleware/error-handler.js";
 
@@ -12,6 +13,8 @@ import mushafRoutes from "./routes/mushaf.routes.js";
 const app = express();
 
 app.disable("x-powered-by");
+app.set("trust proxy", 1);
+app.use(compression());
 app.use(cors());
 app.use(express.json({ limit: "100kb" }));
 
@@ -31,7 +34,18 @@ app.use("/api/mushaf", mushafRoutes);
 // Frontend web (build Expo copié dans Backend/public)
 const publicDir = path.join(process.cwd(), "public");
 
-app.use(express.static(publicDir));
+app.use(
+  express.static(publicDir, {
+    // Les bundles Expo sont hachés : cache long. index.html reste toujours revalidé.
+    setHeaders(res, filePath) {
+      if (filePath.endsWith(".html")) {
+        res.setHeader("Cache-Control", "no-cache");
+      } else if (/[\\/]_expo[\\/]|[\\/]assets[\\/]/.test(filePath)) {
+        res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+      }
+    },
+  }),
+);
 
 app.get("/{*splat}", (req, res, next) => {
   if (req.path.startsWith("/api")) return next();
